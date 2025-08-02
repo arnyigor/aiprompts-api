@@ -83,28 +83,42 @@ export default async function handler(req, res) {
         const fileName = `${promptData.uuid}.json`;
         const filePath = `prompts/${category}/${fileName}`;
         
-        const fileContent = JSON.stringify(promptData, null, 2); 
+        const fileContent = JSON.stringify(promptData, null, 2);
         const contentEncoded = Buffer.from(fileContent).toString('base64');
 
-        // Этап 3: Создание файла с проверкой на дубликат
+        // --- Этап 3: Создание файла с проверкой на дубликат ---
+        // Сначала проверяем, существует ли файл, чтобы избежать перезаписи
         try {
-            await octokit.repos.createFile({
+            // Этот вызов упадет с ошибкой 404, если файла нет, и вернет данные, если он есть.
+            await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
                 owner,
                 repo,
                 path: filePath,
-                message: `feat(prompts): add new prompt "${promptData.title}"`,
-                content: contentEncoded,
-                committer: {
-                    name: 'AIPrompts API Bot',
-                    email: 'bot@aiprompts.dev'
-                },
             });
+            // Если мы дошли сюда, значит, файл существует. Выдаем ошибку конфликта.
+            return res.status(409).json({ message: 'Conflict: A prompt with this UUID already exists.' });
+
         } catch (error) {
-            if (error.status === 422) {
-                return res.status(409).json({ message: 'Conflict: A prompt with this UUID already exists.' });
+            // Ошибка 404 - это ХОРОШАЯ ошибка. Она означает, что файла нет и мы можем его создать.
+            if (error.status !== 404) {
+                // Если ошибка любая другая (например, 500 от GitHub), пробрасываем ее дальше.
+                throw error;
             }
-            throw error;
         }
+
+        // Если мы прошли проверку (получили 404), создаем файл.
+        // Используем правильное имя метода: createOrUpdateFileContents
+        await octokit.repos.createOrUpdateFileContents({
+            owner,
+            repo,
+            path: filePath,
+            message: `feat(prompts): add new prompt "${promptData.title}"`,
+            content: contentEncoded,
+            committer: {
+                name: 'AIPrompts API Bot',
+                email: 'bot@aiprompts.dev'
+            },
+        });
 
         // Этап 4: Запуск Workflow
         const issueBody = formatIssueBody(promptData, filePath);
