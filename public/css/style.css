@@ -127,6 +127,8 @@ nav {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 1.5rem;
+    /* Добавляем это свойство, чтобы ряды сетки вели себя как flex-контейнеры */
+    align-items: stretch;
 }
 
 .prompt-card {
@@ -134,10 +136,11 @@ nav {
     border-radius: 8px;
     box-shadow: var(--shadow);
     padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
+    /* КЛЮЧЕВЫЕ ИЗМЕНЕНИЯ: Превращаем карточку во flex-контейнер */
+    display: flex;
+    flex-direction: column;
 }
 
 .prompt-card:hover {
@@ -156,19 +159,32 @@ nav {
     font-size: 0.85rem;
     color: #6c757d;
     margin-bottom: 1rem;
+    /* Предотвращаем сжатие этого блока */
+    flex-shrink: 0;
 }
 
 .prompt-card-desc {
     font-size: 0.95rem;
+    color: #495057;
+    /* КЛЮЧЕВЫЕ ИЗМЕНЕНИЯ: Обрезаем длинный текст */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 4; /* Показываем максимум 4 строки */
+    -webkit-box-orient: vertical;
+    /* Это поле будет растягиваться, отодвигая теги вниз */
     flex-grow: 1;
     margin-bottom: 1rem;
-    color: #495057;
 }
 
 .prompt-card-tags {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+    /* Предотвращаем сжатие этого блока */
+    flex-shrink: 0;
+    /* Добавляем небольшой отступ сверху, чтобы отделить от описания */
+    margin-top: auto;
 }
 
 .tag {
