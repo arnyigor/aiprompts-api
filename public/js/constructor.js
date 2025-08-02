@@ -1,6 +1,5 @@
 // Константы вынесены для легкого доступа
-const CONSTRUCTOR_API_URL = 'https://aipromptsapi.vercel.app/api/create-prompt-issue';
-const CONSTRUCTOR_GITHUB_API_URL = 'https://api.github.com/repos/arnyigor/aiprompts/contents/prompts';
+const CONSTRUCTOR_API_URL = '/api/create-prompt-issue';
 
 // HTML-шаблон для формы
 const constructorHtmlTemplate = `
@@ -10,7 +9,7 @@ const constructorHtmlTemplate = `
             <div class="form-grid">
                 <div class="form-group"><label for="title">Название <span class="required">*</span></label><input type="text" id="title" name="title" required></div>
                 <div class="form-group"><label for="version">Версия <span class="required">*</span></label><input type="text" id="version" name="version" required value="1.0.0"></div>
-                <div class="form-group"><label for="category-constructor">Категория <span class="required">*</span></label><select id="category-constructor" name="category" required><option value="">Загрузка...</option></select></div>
+                <div class="form-group"><label for="category-constructor">Категория <span class="required">*</span></label><select id="category-constructor" name="category" required><option value="">Выберите категорию...</option></select></div>
             </div>
             <div class="form-group" style="margin-top: 1.5rem;"><label for="description">Описание</label><textarea id="description" name="description"></textarea></div>
         </fieldset>
@@ -43,16 +42,18 @@ const constructorHtmlTemplate = `
     </form>
 `;
 
-// Главная функция, которая запускает всю логику конструктора
-function initializeConstructor(container) {
+// Главная функция, которая запускает всю логику конструктора.
+function initializeConstructor(container, categories = []) {
     container.innerHTML = constructorHtmlTemplate;
 
+    // --- ПОЛУЧЕНИЕ ЭЛЕМЕНТОВ DOM ВНУТРИ КОНТЕЙНЕРА ---
     const form = container.querySelector('#prompt-form');
     const jsonPreview = container.querySelector('#json-preview-constructor');
     const responseArea = container.querySelector('#response-area-constructor');
     const categorySelect = container.querySelector('#category-constructor');
-    let currentUUID = '';
+    let currentId = ''; // ИЗМЕНЕНО: uuid -> id
 
+    // --- ЛОГИКА КОНСТРУКТОРА ---
     const itemTemplates = {
         simple: () => `<input type="text" value="" /><button type="button" class="btn-remove">×</button>`,
         variable: () => `<div class="form-grid" style="width: 100%"><input type="text" placeholder="Имя" data-key="name" /><input type="text" placeholder="Описание" data-key="description" /><input type="text" placeholder="Значение" data-key="default_value" /></div><button type="button" class="btn-remove">×</button>`,
@@ -72,11 +73,11 @@ function initializeConstructor(container) {
     }
 
     function gatherPayload() {
-        if (!currentUUID) currentUUID = (() => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }))();
+        if (!currentId) currentId = (() => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }))();
         const formData = new FormData(form);
         const now = new Date().toISOString();
         return {
-            uuid: currentUUID,
+            id: currentId, // ИЗМЕНЕНО: uuid -> id
             title: formData.get('title'),
             version: formData.get('version'),
             status: "active", is_local: false, is_favorite: false,
@@ -95,7 +96,7 @@ function initializeConstructor(container) {
             created_at: now, updated_at: now,
         };
     }
-
+    
     function updateJsonPreview() {
         jsonPreview.textContent = JSON.stringify(gatherPayload(), null, 2);
     }
@@ -109,17 +110,9 @@ function initializeConstructor(container) {
         });
         return isValid;
     }
-
-    async function fetchCategoriesForConstructor() {
-        const categorySelect = document.getElementById('category-constructor');
-        try {
-            // Используем тот же самый прокси-эндпоинт
-            const response = await fetch('/api/get-prompts');
-            if (!response.ok) throw new Error('Failed to fetch categories');
-
-            const prompts = await response.json();
-            const categories = [...new Set(prompts.map(p => p.category))].sort();
-
+    
+    function populateCategories() {
+        if (categories && categories.length > 0) {
             categorySelect.innerHTML = '<option value="">Выберите категорию...</option>';
             categories.forEach(category => {
                 const option = document.createElement('option');
@@ -127,13 +120,12 @@ function initializeConstructor(container) {
                 option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
                 categorySelect.appendChild(option);
             });
-
-        } catch (error) {
-            console.error("Error fetching categories for constructor:", error);
-            categorySelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+        } else {
+             categorySelect.innerHTML = '<option value="">Категории не найдены</option>';
         }
     }
 
+    // --- ПРИВЯЗКА СОБЫТИЙ ВНУТРИ КОНСТРУКТОРА ---
     container.querySelectorAll('.btn-add').forEach(button => {
         button.addEventListener('click', (e) => {
             const listId = e.target.dataset.listId;
@@ -172,11 +164,12 @@ function initializeConstructor(container) {
         } finally {
             submitBtn.disabled = false;
             submitBtn.classList.remove('loading');
-            currentUUID = '';
+            currentId = ''; // ИЗМЕНЕНО: uuid -> id
             updateJsonPreview();
         }
     });
-
-    fetchCategoriesForConstructor();
+    
+    // --- ЗАПУСК ЛОГИКИ КОНСТРУКТОРА ---
+    populateCategories();
     updateJsonPreview();
 }

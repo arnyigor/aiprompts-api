@@ -136,6 +136,13 @@ nav {
     padding: 1.5rem;
     display: flex;
     flex-direction: column;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.prompt-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
 }
 
 .prompt-card h3 {
@@ -178,6 +185,118 @@ nav {
     padding: 4rem;
     color: #6c757d;
 }
+
+/* --- Стили для модального окна (САМОЕ ВАЖНОЕ) --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+}
+
+.modal-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease;
+}
+
+.modal-content {
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 2rem;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    transform: translateY(20px);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay.visible .modal-content {
+    transform: translateY(0);
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    font-size: 2rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #6c757d;
+}
+
+.modal-header h2 {
+    margin: 0 0 0.5rem 0;
+    color: var(--accent-color);
+}
+
+.modal-meta {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.prompt-view-block {
+    margin-top: 1.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+
+.prompt-view-header {
+    background: #f8f9fa;
+    padding: 0.75rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.prompt-view-header h4 {
+    margin: 0;
+}
+
+.btn-copy {
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.btn-copy:hover {
+    background: var(--accent-hover);
+}
+
+.prompt-view-content {
+    padding: 1rem;
+    background: var(--code-bg);
+    color: var(--code-text);
+    white-space: pre-wrap;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    max-height: 300px;
+    overflow-y: auto;
+    border-radius: 0 0 5px 5px;
+}
+
 
 /* Стили для Конструктора */
 #constructor-view form {
@@ -406,4 +525,113 @@ nav {
     margin: 0;
     font-size: 1.1rem;
     color: #495057;
+}
+
+/* --- Стили для модального окна --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+}
+
+.modal-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 2rem;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    transform: scale(0.9);
+    transition: transform 0.3s;
+}
+
+.modal-overlay.visible .modal-content {
+    transform: scale(1);
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    font-size: 2rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #6c757d;
+}
+
+.modal-header h2 {
+    margin: 0 0 0.5rem 0;
+    color: var(--accent-color);
+}
+
+.modal-meta {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.prompt-view-block {
+    margin-top: 1.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+
+.prompt-view-header {
+    background: #f8f9fa;
+    padding: 0.75rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.prompt-view-header h4 {
+    margin: 0;
+}
+
+.btn-copy {
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.btn-copy:hover {
+    background: var(--accent-hover);
+}
+
+.prompt-view-content {
+    padding: 1rem;
+    background: var(--code-bg);
+    color: var(--code-text);
+    white-space: pre-wrap;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    max-height: 300px;
+    overflow-y: auto;
 }
