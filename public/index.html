@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,6 +19,7 @@
             --code-text: #dfe6e9;
             --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
         }
+
         body {
             font-family: var(--font-family);
             background-color: var(--bg-color);
@@ -27,15 +29,24 @@
             display: flex;
             justify-content: center;
         }
+
         main {
             width: 100%;
             max-width: 800px;
         }
-        h1, h2 {
+
+        h1,
+        h2 {
             text-align: center;
             color: var(--accent-color);
         }
-        h2 { font-size: 1.2rem; margin-bottom: 1rem; color: #7f8c8d; }
+
+        h2 {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            color: #7f8c8d;
+        }
+
         form {
             background: var(--form-bg);
             padding: 2rem;
@@ -45,15 +56,19 @@
             flex-direction: column;
             gap: 1.5rem;
         }
+
         .form-group {
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
         }
+
         label {
             font-weight: 600;
         }
-        input, textarea {
+
+        input,
+        textarea {
             padding: 0.75rem;
             border: 1px solid var(--border-color);
             border-radius: 4px;
@@ -61,15 +76,19 @@
             font-family: inherit;
             transition: border-color 0.2s, box-shadow 0.2s;
         }
-        input:focus, textarea:focus {
+
+        input:focus,
+        textarea:focus {
             outline: none;
             border-color: var(--accent-color);
             box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
         }
+
         textarea {
             min-height: 100px;
             resize: vertical;
         }
+
         button {
             padding: 0.8rem 1.5rem;
             background-color: var(--accent-color);
@@ -82,13 +101,16 @@
             transition: background-color 0.2s;
             position: relative;
         }
+
         button:hover {
             background-color: #2980b9;
         }
+
         button:disabled {
             background-color: #bdc3c7;
             cursor: not-allowed;
         }
+
         .spinner {
             display: none;
             border: 3px solid rgba(255, 255, 255, 0.3);
@@ -103,10 +125,21 @@
             margin-left: -10px;
             margin-top: -10px;
         }
-        button.loading .spinner { display: block; }
-        button.loading .button-text { visibility: hidden; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
+
+        button.loading .spinner {
+            display: block;
+        }
+
+        button.loading .button-text {
+            visibility: hidden;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
         .preview-area {
             margin-top: 1.5rem;
             padding: 1rem;
@@ -116,220 +149,237 @@
             font-family: 'Courier New', Courier, monospace;
             font-size: 0.9rem;
         }
+
         .preview-area.json-preview {
             background-color: var(--code-bg);
             color: var(--code-text);
         }
+
         .preview-area.success {
             background-color: #eafaf1;
             color: #229954;
             border: 1px solid var(--success-color);
         }
+
         .preview-area.error {
             background-color: #fdedec;
             color: #c0392b;
             border: 1px solid var(--error-color);
         }
+
         #response-area a {
-            color: inherit; /* Наследуем цвет от родителя (зеленый) */
+            color: inherit;
+            /* Наследуем цвет от родителя (зеленый) */
             font-weight: 600;
             text-decoration: underline;
         }
+
         #response-area a:hover {
             text-decoration: none;
         }
     </style>
 </head>
+
 <body>
-<main>
-    <h1>AIPrompts API Tester</h1>
-    <form id="prompt-form">
-        <div class="form-group">
-            <label for="title">Title (обязательно)</label>
-            <input type="text" id="title" name="title" required value="Промпт для создания логотипа">
-        </div>
+    <main>
+        <h1>AIPrompts API Tester</h1>
+        <form id="prompt-form">
+            <div class="form-group">
+                <label for="title">Title (обязательно)</label>
+                <input type="text" id="title" name="title" required value="Промпт для создания логотипа">
+            </div>
 
-        <div class="form-group">
-            <label for="version">Version (обязательно)</label>
-            <input type="text" id="version" name="version" required value="1.0.0">
-        </div>
+            <div class="form-group">
+                <label for="version">Version (обязательно)</label>
+                <input type="text" id="version" name="version" required value="1.0.0">
+            </div>
 
-        <div class="form-group">
-            <label for="category">Category (обязательно)</label>
-            <input type="text" id="category" name="category" required value="design">
-        </div>
+            <div class="form-group">
+                <label for="category">Category (обязательно)</label>
+                <input type="text" id="category" name="category" required value="design">
+            </div>
 
-        <div class="form-group">
-            <label for="tags">Tags (через запятую)</label>
-            <input type="text" id="tags" name="tags" value="logo, startup, vector">
-        </div>
+            <div class="form-group">
+                <label for="tags">Tags (через запятую)</label>
+                <input type="text" id="tags" name="tags" value="logo, startup, vector">
+            </div>
 
-        <div class="form-group">
-            <label for="description">Description</label>
-            <textarea id="description"
-                      name="description">Создает минималистичный векторный логотип для IT-стартапа.</textarea>
-        </div>
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description"
+                    name="description">Создает минималистичный векторный логотип для IT-стартапа.</textarea>
+            </div>
 
-        <div class="form-group">
-            <label for="content_ru">Content (RU)</label>
-            <textarea id="content_ru" name="content_ru">Сгенерируй 5 вариантов логотипа для компании 'NexaTech'. Логотип должен быть в стиле минимализм, использовать синий и серый цвета.</textarea>
-        </div>
-        <div class="form-group">
-            <label for="content_en">Content (EN)</label>
-            <textarea id="content_en" name="content_en">Generate 5 logo options for 'NexaTech' company. The logo should be in a minimalist style, using blue and gray colors.</textarea>
-        </div>
+            <div class="form-group">
+                <label for="content_ru">Content (RU)</label>
+                <textarea id="content_ru"
+                    name="content_ru">Сгенерируй 5 вариантов логотипа для компании 'NexaTech'. Логотип должен быть в стиле минимализм, использовать синий и серый цвета.</textarea>
+            </div>
+            <div class="form-group">
+                <label for="content_en">Content (EN)</label>
+                <textarea id="content_en"
+                    name="content_en">Generate 5 logo options for 'NexaTech' company. The logo should be in a minimalist style, using blue and gray colors.</textarea>
+            </div>
 
-        <button type="submit" id="submit-btn">
-            <span class="button-text">Отправить на модерацию</span>
-            <div class="spinner"></div>
-        </button>
-    </form>
+            <button type="submit" id="submit-btn">
+                <span class="button-text">Отправить на модерацию</span>
+                <div class="spinner"></div>
+            </button>
+        </form>
 
-    <h2>Предпросмотр JSON</h2>
-    <pre id="json-preview" class="preview-area json-preview"></pre>
+        <h2>Предпросмотр JSON</h2>
+        <pre id="json-preview" class="preview-area json-preview"></pre>
 
-    <h2>Ответ Сервера</h2>
-    <pre id="response-area" class="preview-area" aria-live="polite"></pre>
-</main>
+        <h2>Ответ Сервера</h2>
+        <pre id="response-area" class="preview-area" aria-live="polite"></pre>
+    </main>
 
-<script>
-    // === КОНФИГУРАЦИЯ: УКАЖИТЕ URL ВАШЕГО API ===
-    const API_URL = 'https://aipromptsapi.vercel.app/api/create-prompt-issue';
+    <script>
+        // === КОНФИГУРАЦИЯ: УКАЖИТЕ URL ВАШЕГО API ===
+        const API_URL = 'https://aipromptsapi.vercel.app/api/create-prompt-issue';
 
-    document.addEventListener('DOMContentLoaded', () => {
-        const form = document.getElementById('prompt-form');
-        const submitBtn = document.getElementById('submit-btn');
-        const jsonPreview = document.getElementById('json-preview');
-        const responseArea = document.getElementById('response-area');
-        let currentUUID = '';
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('prompt-form');
+            const submitBtn = document.getElementById('submit-btn');
+            const jsonPreview = document.getElementById('json-preview');
+            const responseArea = document.getElementById('response-area');
+            let currentUUID = '';
 
-        function generateUUID() {
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-            });
-        }
-
-        // === Функция для сборки JSON по полной структуре ===
-        function updateJsonPreview() {
-            if (!currentUUID) {
-                currentUUID = generateUUID();
-            }
-            const formData = new FormData(form);
-            const now = new Date();
-            // Важно: .toISOString() всегда возвращает время в формате UTC (Z на конце)
-            const timestamp = now.toISOString();
-
-            // Собираем полный payload, включая все обязательные поля
-            const payload = {
-                // Переименовано в `uuid` для соответствия с бэкендом
-                uuid: currentUUID,
-                title: formData.get('title'),
-                version: formData.get('version'),
-                // Статус и флаги по умолчанию
-                status: "active",
-                is_local: false,
-                is_favorite: false,
-                description: formData.get('description'),
-                content: {
-                    ru: formData.get('content_ru'),
-                    en: formData.get('content_en'),
-                },
-                // Поля-заглушки, которые должны быть в структуре
-                compatible_models: [],
-                category: formData.get('category'),
-                tags: formData.get('tags').split(',').map(tag => tag.trim()).filter(tag => tag),
-                variables: [],
-                metadata: {
-                    author: { id: "", name: "WebApp Tester" },
-                    source: "WebApp",
-                    notes: ""
-                },
-                rating: {
-                    score: 0.0,
-                    votes: 0
-                },
-                // Временные метки в формате UTC ISO 8601
-                created_at: timestamp,
-                updated_at: timestamp,
-            };
-
-            jsonPreview.textContent = JSON.stringify(payload, null, 2);
-            return payload;
-        }
-
-        form.addEventListener('input', updateJsonPreview);
-        updateJsonPreview();
-
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            submitBtn.disabled = true;
-            submitBtn.classList.add('loading');
-            responseArea.textContent = '';
-            responseArea.className = 'preview-area';
-
-            const payload = updateJsonPreview();
-
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
+            function generateUUID() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
                 });
-
-                const responseData = await response.json();
-
-
-                if (!response.ok) {
-                    throw new Error(JSON.stringify(responseData, null, 2));
-                }
-
-                responseArea.classList.add('success');
-                // Очищаем старое содержимое
-                responseArea.innerHTML = '';
-                // Создаем текст сообщения
-                const messageNode = document.createElement('p');
-                messageNode.style.margin = '0 0 1rem 0';
-                messageNode.textContent = ✅ Успех! Статус: ${response.status}. Pull Request успешно создан.;
-                responseArea.appendChild(messageNode);
-                // Создаем кликабельную ссылку на Pull Request
-                if (responseData.pullRequestUrl) {
-                const linkNode = document.createElement('a');
-                linkNode.href = responseData.pullRequestUrl;
-                linkNode.textContent = responseData.pullRequestUrl;
-                linkNode.target = '_blank'; // Открывать в новой вкладке
-                linkNode.rel = 'noopener noreferrer';
-                responseArea.appendChild(linkNode);
-                } else {
-                // Если по какой-то причине URL не пришел, показываем сырой JSON
-                responseArea.textContent += \n\n${JSON.stringify(responseData, null, 2)};
-                }
-
-                currentUUID = '';
-                updateJsonPreview();
-
-           } catch (error) {
-            responseArea.classList.add('error');
-            let displayMessage = `Ошибка!\n\n`;
-
-            // Попытка 1: Разобрать сообщение как JSON (для ошибок от нашего API)
-            try {
-                const errorJson = JSON.parse(error.message);
-                // Достаем внутреннее сообщение, если оно есть
-                const internalMessage = errorJson.details || errorJson.message || 'No details available.';
-                displayMessage += `Статус от API: ${errorJson.status || 'N/A'}\nСообщение: ${internalMessage}`;
-            } catch (jsonError) {
-                // Попытка 2: Если не JSON, просто выводим как есть (для сетевых ошибок и др.)
-                displayMessage += error.message;
             }
 
-            responseArea.textContent = displayMessage;
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.classList.remove('loading');
+            // === Функция для сборки JSON по полной структуре ===
+            function updateJsonPreview() {
+                if (!currentUUID) {
+                    currentUUID = generateUUID();
+                }
+                const formData = new FormData(form);
+                const now = new Date();
+                // Важно: .toISOString() всегда возвращает время в формате UTC (Z на конце)
+                const timestamp = now.toISOString();
+
+                // Собираем полный payload, включая все обязательные поля
+                const payload = {
+                    // Переименовано в `uuid` для соответствия с бэкендом
+                    uuid: currentUUID,
+                    title: formData.get('title'),
+                    version: formData.get('version'),
+                    // Статус и флаги по умолчанию
+                    status: "active",
+                    is_local: false,
+                    is_favorite: false,
+                    description: formData.get('description'),
+                    content: {
+                        ru: formData.get('content_ru'),
+                        en: formData.get('content_en'),
+                    },
+                    // Поля-заглушки, которые должны быть в структуре
+                    compatible_models: [],
+                    category: formData.get('category'),
+                    tags: formData.get('tags').split(',').map(tag => tag.trim()).filter(tag => tag),
+                    variables: [],
+                    metadata: {
+                        author: { id: "", name: "WebApp Tester" },
+                        source: "WebApp",
+                        notes: ""
+                    },
+                    rating: {
+                        score: 0.0,
+                        votes: 0
+                    },
+                    // Временные метки в формате UTC ISO 8601
+                    created_at: timestamp,
+                    updated_at: timestamp,
+                };
+
+                jsonPreview.textContent = JSON.stringify(payload, null, 2);
+                return payload;
             }
+
+            form.addEventListener('input', updateJsonPreview);
+            updateJsonPreview();
+
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                submitBtn.disabled = true;
+                submitBtn.classList.add('loading');
+                responseArea.textContent = '';
+                responseArea.className = 'preview-area';
+
+                const payload = updateJsonPreview();
+
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+
+                    const responseData = await response.json();
+
+
+                    if (!response.ok) {
+                        throw new Error(JSON.stringify(responseData, null, 2));
+                    }
+
+                    responseArea.classList.add('success');
+                    // Очищаем старое содержимое
+                    responseArea.innerHTML = '';
+
+                    // --- ИСПРАВЛЕНИЕ ---
+                    // Создаем текст сообщения с использованием обратных кавычек
+                    const messageNode = document.createElement('p');
+                    messageNode.style.margin = '0 0 1rem 0';
+                    messageNode.textContent = `✅ Успех! Статус: ${response.status}. Pull Request успешно создан.`;
+                    responseArea.appendChild(messageNode);
+
+                    // Создаем кликабельную ссылку на Pull Request
+                    if (responseData.pullRequestUrl) {
+                        const linkNode = document.createElement('a');
+                        linkNode.href = responseData.pullRequestUrl;
+                        linkNode.textContent = responseData.pullRequestUrl;
+                        linkNode.target = '_blank'; // Открывать в новой вкладке
+                        linkNode.rel = 'noopener noreferrer';
+                        responseArea.appendChild(linkNode);
+                    } else {
+                        // --- ИСПРАВЛЕНИЕ ---
+                        // Если по какой-то причине URL не пришел, показываем сырой JSON
+                        // Добавляем его в <pre> тег для сохранения форматирования
+                        const preNode = document.createElement('pre');
+                        preNode.textContent = JSON.stringify(responseData, null, 2);
+                        responseArea.appendChild(preNode);
+                    }
+
+                    currentUUID = '';
+                    updateJsonPreview();
+
+                } catch (error) {
+                    responseArea.classList.add('error');
+                    let displayMessage = `Ошибка!\n\n`;
+
+                    // Попытка 1: Разобрать сообщение как JSON (для ошибок от нашего API)
+                    try {
+                        const errorJson = JSON.parse(error.message);
+                        // Достаем внутреннее сообщение, если оно есть
+                        const internalMessage = errorJson.details || errorJson.message || 'No details available.';
+                        displayMessage += `Статус от API: ${errorJson.status || 'N/A'}\nСообщение: ${internalMessage}`;
+                    } catch (jsonError) {
+                        // Попытка 2: Если не JSON, просто выводим как есть (для сетевых ошибок и др.)
+                        displayMessage += error.message;
+                    }
+
+                    responseArea.textContent = displayMessage;
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('loading');
+                }
+            });
         });
-    });
-</script>
+    </script>
 </body>
+
 </html>
