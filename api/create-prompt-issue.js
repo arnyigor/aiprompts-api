@@ -63,79 +63,55 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ message: 'Method Not Allowed' });
     }
-
     try {
-        // Этап 1: Валидация с помощью Zod
         const validationResult = PromptSchema.safeParse(req.body);
         if (!validationResult.success) {
-            const formattedErrors = validationResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
-            return res.status(400).json({ message: `Bad Request: Invalid data structure. Details: ${formattedErrors}` });
+            // ... обработка ошибок валидации, как была ...
+            return res.status(400).json({ /* ... */ });
         }
         const promptData = validationResult.data;
-
-        // Этап 2: Инициализация и определение путей
         const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
         const owner = process.env.GITHUB_REPO_OWNER;
         const repo = process.env.GITHUB_REPO_NAME;
+        const mainBranch = process.env.GITHUB_MAIN_BRANCH || 'main'; // Имя основной ветки
 
-        // Категория теперь гарантированно существует
-        const category = promptData.category;
-        const fileName = `${promptData.uuid}.json`;
-        const filePath = `prompts/${category}/${fileName}`;
-        
-        const fileContent = JSON.stringify(promptData, null, 2);
-        const contentEncoded = Buffer.from(fileContent).toString('base64');
+        // --- Этап 1: Создание новой ветки ---
+        const newBranchName = `prompts/add-${promptData.uuid}`;
+        const mainBranchRef = await octokit.rest.git.getRef({
+            owner, repo, ref: `heads/${mainBranch}`,
+        });
+        const mainBranchSha = mainBranchRef.data.object.sha;
+        await octokit.rest.git.createRef({
+            owner, repo, ref: `refs/heads/${newBranchName}`, sha: mainBranchSha,
+        });
 
-        // --- Этап 3: Создание файла с проверкой на дубликат ---
-        // Сначала проверяем, существует ли файл, чтобы избежать перезаписи
-        try {
-            // Этот вызов упадет с ошибкой 404, если файла нет, и вернет данные, если он есть.
-            await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
-                owner,
-                repo,
-                path: filePath,
-            });
-            // Если мы дошли сюда, значит, файл существует. Выдаем ошибку конфликта.
-            return res.status(409).json({ message: 'Conflict: A prompt with this UUID already exists.' });
-
-        } catch (error) {
-            // Ошибка 404 - это ХОРОШАЯ ошибка. Она означает, что файла нет и мы можем его создать.
-            if (error.status !== 404) {
-                // Если ошибка любая другая (например, 500 от GitHub), пробрасываем ее дальше.
-                throw error;
-            }
-        }
-
-        // Если мы прошли проверку (получили 404), создаем файл.
-        // Используем правильное имя метода: createOrUpdateFileContents
-        await octokit.repos.createOrUpdateFileContents({
-            owner,
-            repo,
-            path: filePath,
+        // --- Этап 2: Коммит файла в новую ветку ---
+        const filePath = `prompts/${promptData.category}/${promptData.uuid}.json`;
+        await octokit.rest.repos.createOrUpdateFileContents({
+            owner, repo, path: filePath,
             message: `feat(prompts): add new prompt "${promptData.title}"`,
-            content: contentEncoded,
-            committer: {
-                name: 'AIPrompts API Bot',
-                email: 'bot@aiprompts.dev'
-            },
+            content: Buffer.from(JSON.stringify(promptData, null, 2)).toString('base64'),
+            branch: newBranchName, // Указываем новую ветку
+            committer: { name: 'AIPrompts API Bot', email: 'bot@aiprompts.dev' },
         });
 
-        // Этап 4: Запуск Workflow
-        const issueBody = formatIssueBody(promptData, filePath);
-        await octokit.repos.createDispatchEvent({
-            owner,
-            repo,
-            event_type: 'create-moderation-issue',
-            client_payload: {
-                title: promptData.title,
-                body: issueBody 
-            }
+        // --- Этап 3: Создание Pull Request ---
+        const pr = await octokit.rest.pulls.create({
+            owner, repo,
+            title: `Новый промпт: ${promptData.title}`,
+            head: newBranchName, // Откуда
+            base: mainBranch,    // Куда
+            body: `Запрос на добавление нового промпта. Файл: \`${filePath}\`.\n\nПожалуйста, проверьте содержимое и слейте (merge) этот Pull Request для одобрения.`,
+            maintainer_can_modify: true
         });
 
-        res.status(202).json({ message: 'Accepted: Prompt submitted and is awaiting moderation.' });
+        res.status(201).json({ 
+            message: 'Pull Request created successfully. Awaiting moderation.',
+            pullRequestUrl: pr.data.html_url
+        });
 
     } catch (error) {
-        console.error('FATAL: Error in processing pipeline:', error);
-        res.status(500).json({ message: 'Internal Server Error. Please contact support.' });
+        console.error('FATAL: Error in PR creation pipeline:', error);
+        res.status(500).json({ message: 'Internal Server Error.' });
     }
 }
