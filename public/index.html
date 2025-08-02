@@ -3,323 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Конструктор Промптов | AIPrompts</title>
-    <!-- Стили остаются такими же. Для краткости опущены. -->
-    <style>
-        :root {
-            --bg-color: #f8f9fa; --form-bg: #ffffff; --text-color: #212529; --border-color: #dee2e6;
-            --accent-color: #007bff; --accent-hover: #0056b3; --error-color: #dc3545; --success-color: #28a745;
-            --code-bg: #212529; --code-text: #f8f9fa; --font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-        body { font-family: var(--font-family); background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 1.5rem; display: flex; justify-content: center; line-height: 1.6; }
-        main { width: 100%; max-width: 900px; }
-        h1 { text-align: center; color: var(--accent-color); margin-bottom: 0.5rem; }
-        p.subtitle { text-align: center; color: #6c757d; margin-top: 0; margin-bottom: 2.5rem; }
-        form { background: var(--form-bg); border-radius: 8px; box-shadow: var(--shadow); }
-        fieldset { border: 1px solid var(--border-color); border-radius: 6px; padding: 1.5rem; margin-bottom: 2rem; }
-        legend { font-size: 1.25rem; font-weight: 600; padding: 0 0.5rem; color: var(--accent-color); }
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
-        .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
-        label { font-weight: 500; }
-        label .required { color: var(--error-color); }
-        input, textarea, select { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 4px; font-size: 1rem; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s; background-color: #fff; }
-        input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2); }
-        input.invalid, select.invalid { border-color: var(--error-color); }
-        textarea { min-height: 120px; resize: vertical; }
-        .dynamic-list { display: flex; flex-direction: column; gap: 0.5rem; }
-        .dynamic-item { display: flex; align-items: center; gap: 0.5rem; }
-        .dynamic-item input { flex-grow: 1; }
-        .btn-remove { background: #f8d7da; color: var(--error-color); border: 1px solid var(--error-color); border-radius: 50%; width: 28px; height: 28px; cursor: pointer; font-weight: bold; font-size: 1.2rem; line-height: 1; padding-bottom: 3px; }
-        .btn-add { background: #e9ecef; color: #495057; border: 1px dashed #adb5bd; border-radius: 4px; padding: 0.5rem; cursor: pointer; text-align: center; font-weight: 500; }
-        .btn-submit { padding: 0.8rem 1.5rem; background-color: var(--accent-color); color: white; border: none; border-radius: 4px; font-size: 1.1rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s; position: relative; display: block; width: 100%; margin-top: 1rem; }
-        .btn-submit:hover { background-color: var(--accent-hover); }
-        .btn-submit:disabled { background-color: #bdc3c7; cursor: not-allowed; }
-        .spinner { display: none; border: 3px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff; width: 20px; height: 20px; animation: spin 1s ease-in-out infinite; position: absolute; left: 50%; top: 50%; margin-left: -10px; margin-top: -10px; }
-        .btn-submit.loading .spinner { display: block; }
-        .btn-submit.loading .button-text { visibility: hidden; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .preview-container { margin-top: 2rem; }
-        .preview-area { margin-top: 1rem; padding: 1rem; border-radius: 4px; word-break: break-all; white-space: pre-wrap; font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace; font-size: 0.9rem; max-height: 400px; overflow-y: auto; }
-        .preview-area.json-preview { background-color: var(--code-bg); color: var(--code-text); }
-        .preview-area.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .preview-area.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .preview-area a { color: inherit; font-weight: 600; }
-        .variant-item { border: 1px solid #e9ecef; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; background: #f8f9fa; }
-        .variant-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-        .variant-header h4 { margin: 0; font-size: 1.1rem; color: #495057;}
-    </style>
+    <title>AIPrompts Hub</title>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <main>
-        <h1>Конструктор Промптов</h1>
-        <p class="subtitle">Создайте новый промпт для добавления в AIPrompts</p>
-
-        <form id="prompt-form" novalidate>
-            <fieldset>
-                <legend>Основная информация</legend>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="title">Название <span class="required">*</span></label>
-                        <input type="text" id="title" name="title" required value="Промпт для создания логотипа">
-                    </div>
-                    <div class="form-group">
-                        <label for="version">Версия <span class="required">*</span></label>
-                        <input type="text" id="version" name="version" required value="1.0.0">
-                    </div>
-                    <div class="form-group">
-                        <label for="category">Категория <span class="required">*</span></label>
-                        <select id="category" name="category" required>
-                            <option value="">Загрузка...</option>
-                        </select>
-                    </div>
+    <div class="container">
+        <header>
+            <h1>AIPrompts Hub</h1>
+            <nav>
+                <a href="#" class="nav-link active" data-view="list-view">Список Промптов</a>
+                <a href="#" class="nav-link" data-view="constructor-view">Конструктор</a>
+            </nav>
+        </header>
+        <main>
+            <div id="list-view" class="view active">
+                <div id="filter-bar">
+                    <input type="search" id="search-input" placeholder="Поиск по названию, описанию, тегам...">
+                    <div id="category-filters"></div>
                 </div>
-                <div class="form-group" style="margin-top: 1.5rem;">
-                    <label for="description">Описание</label>
-                    <textarea id="description" name="description">Создает минималистичный векторный логотип для IT-стартапа.</textarea>
+                <div id="prompt-list-container">
+                    <div id="loader">Загрузка промптов...</div>
+                    <div id="prompt-grid" class="hidden"></div>
                 </div>
-            </fieldset>
-
-            <fieldset>
-                <legend>Базовый Промпт <span class="required">*</span></legend>
-                <p style="color: #6c757d; font-size: 0.9rem; margin-top: -1rem; margin-bottom: 1rem;">Этот вариант будет виден всем пользователям, включая старые версии приложений.</p>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="content_ru">Русский вариант</label>
-                        <textarea id="content_ru" name="content_ru" required>Сгенерируй 5 вариантов логотипа...</textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="content_en">Английский вариант</label>
-                        <textarea id="content_en" name="content_en">Generate 5 logo options...</textarea>
-                    </div>
-                </div>
-            </fieldset>
-            
-            <fieldset>
-                <legend>Специфичные варианты (опционально)</legend>
-                <p style="color: #6c757d; font-size: 0.9rem; margin-top: -1rem; margin-bottom: 1rem;">Эти варианты будут переопределять базовый для конкретных моделей или условий.</p>
-                <div id="variants-list" class="dynamic-list"></div>
-                <div class="btn-add" data-list="variants-list">Добавить специфичный вариант</div>
-            </fieldset>
-            
-            <!-- Остальные fieldset'ы (Теги, Модели, Переменные) -->
-            <fieldset>
-                 <legend>Дополнительные атрибуты</legend>
-                 <div class="form-grid">
-                    <div class="form-group">
-                        <label>Теги</label>
-                        <div id="tags-list" class="dynamic-list"></div>
-                        <div class="btn-add" data-list="tags-list">Добавить тег</div>
-                    </div>
-                    <div class="form-group">
-                        <label>Совместимые модели</label>
-                        <div id="models-list" class="dynamic-list"></div>
-                        <div class="btn-add" data-list="models-list">Добавить модель</div>
-                    </div>
-                </div>
-            </fieldset>
-            <fieldset>
-                <legend>Переменные</legend>
-                <div id="variables-list" class="dynamic-list"></div>
-                <div class="btn-add" data-list="variables-list">Добавить переменную</div>
-            </fieldset>
-
-            <button type="submit" id="submit-btn" class="btn-submit">
-                <span class="button-text">Создать Pull Request</span>
-                <div class="spinner"></div>
-            </button>
-        </form>
-        
-        <!-- Блоки предпросмотра и ответа -->
-        <div class="preview-container">
-            <h2>Предпросмотр JSON</h2>
-            <pre id="json-preview" class="preview-area json-preview"></pre>
-        </div>
-        <div class="preview-container">
-            <h2>Ответ Сервера</h2>
-            <pre id="response-area" class="preview-area" aria-live="polite"></pre>
-        </div>
-    </main>
-
-    <script>
-    const API_URL = 'https://aipromptsapi.vercel.app/api/create-prompt-issue';
-    const GITHUB_API_URL = 'https://api.github.com/repos/arnyigor/aiprompts/contents/prompts';
-
-    document.addEventListener('DOMContentLoaded', () => {
-        // --- Получение элементов DOM ---
-        const form = document.getElementById('prompt-form');
-        const submitBtn = document.getElementById('submit-btn');
-        const jsonPreview = document.getElementById('json-preview');
-        const responseArea = document.getElementById('response-area');
-        const categorySelect = document.getElementById('category');
-        let currentUUID = '';
-
-        // --- ИНИЦИАЛИЗАЦИЯ ---
-        async function init() {
-            await fetchAndPopulateCategories();
-            setupEventListeners();
-            updateJsonPreview();
-        }
-
-        async function fetchAndPopulateCategories() {
-            try {
-                const response = await fetch(GITHUB_API_URL);
-                if (!response.ok) throw new Error(`Failed to fetch categories: ${response.statusText}`);
-                const data = await response.json();
-                
-                const directories = data.filter(item => item.type === 'dir' && !item.name.startsWith('.'));
-                categorySelect.innerHTML = '<option value="">Выберите категорию...</option>';
-                directories.forEach(dir => {
-                    const option = document.createElement('option');
-                    option.value = dir.name;
-                    option.textContent = dir.name.charAt(0).toUpperCase() + dir.name.slice(1);
-                    categorySelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error("Error fetching categories:", error);
-                categorySelect.innerHTML = '<option value="">Не удалось загрузить категории</option>';
-            }
-        }
-
-        // --- УПРАВЛЕНИЕ ДИНАМИЧЕСКИМИ СПИСКАМИ (ИСПРАВЛЕНО) ---
-        const itemTemplates = {
-            simple: (value = '') => `<input type="text" value="${value}" /><button type="button" class="btn-remove">×</button>`,
-            variable: () => `<div class="form-grid" style="width: 100%"><input type="text" placeholder="Имя (e.g., company_name)" data-key="name" /><input type="text" placeholder="Описание" data-key="description" /><input type="text" placeholder="Значение по умолчанию" data-key="default_value" /></div><button type="button" class="btn-remove">×</button>`,
-            variant: () => `<div class="variant-header"><h4>Специфичный вариант</h4><button type="button" class="btn-remove">×</button></div><div class="form-grid"><div class="form-group"><label>Тип</label><input type="text" placeholder="e.g., model" data-key="type" /></div><div class="form-group"><label>ID</label><input type="text" placeholder="e.g., gpt-4" data-key="id" /></div><div class="form-group"><label>Приоритет</label><input type="number" placeholder="e.g., 1" data-key="priority" /></div></div><div class="form-group" style="margin-top: 1rem;"><label>Контент (RU)</label><textarea data-key="content_ru"></textarea></div><div class="form-group"><label>Контент (EN)</label><textarea data-key="content_en"></textarea></div>`
-        };
-
-        function addItem(container, templateHtml) {
-            const item = document.createElement('div');
-            // Применяем классы в зависимости от шаблона
-            if (templateHtml.includes('variant-header')) {
-                item.className = 'variant-item';
-            } else {
-                item.className = 'dynamic-item';
-            }
-            item.innerHTML = templateHtml;
-            container.appendChild(item);
-            item.querySelector('.btn-remove').addEventListener('click', () => {
-                item.remove();
-                updateJsonPreview();
-            });
-        }
-
-        // --- СБОРКА И ВАЛИДАЦИЯ ---
-        function generateUUID() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
-
-        function gatherPayload() {
-            if (!currentUUID) currentUUID = generateUUID();
-            const formData = new FormData(form);
-            const now = new Date().toISOString();
-
-            return {
-                uuid: currentUUID,
-                title: formData.get('title'),
-                version: formData.get('version'),
-                status: "active",
-                is_local: false,
-                is_favorite: false,
-                description: formData.get('description'),
-                content: { ru: formData.get('content_ru'), en: formData.get('content_en') },
-                prompt_variants: Array.from(document.querySelectorAll('#variants-list .variant-item')).map(item => ({
-                    variant_id: { type: item.querySelector('[data-key="type"]').value, id: item.querySelector('[data-key="id"]').value, priority: parseInt(item.querySelector('[data-key="priority"]').value, 10) || 0 },
-                    content: { ru: item.querySelector('[data-key="content_ru"]').value, en: item.querySelector('[data-key="content_en"]').value }
-                })).filter(v => v.variant_id.type && v.variant_id.id),
-                compatible_models: Array.from(document.querySelectorAll('#models-list input')).map(i => i.value).filter(Boolean),
-                category: formData.get('category'),
-                tags: Array.from(document.querySelectorAll('#tags-list input')).map(i => i.value).filter(Boolean),
-                variables: Array.from(document.querySelectorAll('#variables-list .dynamic-item')).map(item => ({
-                    name: item.querySelector('[data-key="name"]').value,
-                    description: item.querySelector('[data-key="description"]').value,
-                    default_value: item.querySelector('[data-key="default_value"]').value
-                })).filter(v => v.name),
-                metadata: { author: { id: "", name: "WebApp Contributor" }, source: "WebApp", notes: "" },
-                rating: { score: 0.0, votes: 0 },
-                created_at: now,
-                updated_at: now,
-            };
-        }
-
-        function updateJsonPreview() {
-            const payload = gatherPayload();
-            jsonPreview.textContent = JSON.stringify(payload, null, 2);
-        }
-        
-        function validateForm() {
-            let isValid = true;
-            form.querySelectorAll('[required]').forEach(input => {
-                const isFilled = input.value.trim() !== '';
-                input.classList.toggle('invalid', !isFilled);
-                if (!isFilled) isValid = false;
-            });
-            return isValid;
-        }
-
-        // --- ОБРАБОТЧИКИ СОБЫТИЙ ---
-        function setupEventListeners() {
-            document.querySelectorAll('.btn-add').forEach(button => {
-                button.addEventListener('click', () => {
-                    const listId = button.dataset.list;
-                    const listContainer = document.getElementById(listId);
-                    let template;
-                    if (listId === 'variants-list') template = itemTemplates.variant();
-                    else if (listId === 'variables-list') template = itemTemplates.variable();
-                    else template = itemTemplates.simple();
-                    
-                    addItem(listContainer, template);
-                    updateJsonPreview(); // ИСПРАВЛЕНИЕ: Вызываем обновление после добавления
-                });
-            });
-            
-            form.addEventListener('input', updateJsonPreview);
-
-            form.addEventListener('submit', async (event) => {
-                event.preventDefault();
-                if (!validateForm()) {
-                    alert('Пожалуйста, заполните все обязательные поля (отмечены красным).');
-                    return;
-                }
-                submitBtn.disabled = true;
-                submitBtn.classList.add('loading');
-                responseArea.innerHTML = '';
-                responseArea.className = 'preview-area';
-                const payload = gatherPayload();
-                try {
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                    });
-                    const responseData = await response.json();
-                    if (!response.ok) throw new Error(JSON.stringify(responseData, null, 2));
-
-                    responseArea.classList.add('success');
-                    const messageNode = document.createElement('p');
-                    messageNode.textContent = `✅ Успех! Статус: ${response.status}. Pull Request успешно создан.`;
-                    responseArea.appendChild(messageNode);
-                    if (responseData.pullRequestUrl) {
-                        const linkNode = document.createElement('a');
-                        linkNode.href = responseData.pullRequestUrl;
-                        linkNode.textContent = responseData.pullRequestUrl;
-                        linkNode.target = '_blank';
-                        linkNode.rel = 'noopener noreferrer';
-                        responseArea.appendChild(linkNode);
-                    }
-                } catch (error) {
-                    responseArea.classList.add('error');
-                    responseArea.textContent = `Ошибка!\n\n${error.message}`;
-                } finally {
-                    submitBtn.disabled = false;
-                    submitBtn.classList.remove('loading');
-                    currentUUID = '';
-                    updateJsonPreview();
-                }
-            });
-        }
-        
-        // Запускаем всё
-        init();
-    });
-</script>
+            </div>
+            <div id="constructor-view" class="view">
+                <!-- Контент будет вставлен сюда -->
+            </div>
+        </main>
+    </div>
+    <script src="js/constructor.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
