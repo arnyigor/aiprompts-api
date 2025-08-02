@@ -26,3 +26,4 @@ Thumbs.db
 # Файлы IDE
 .vscode/
 .idea/
+.vercel
