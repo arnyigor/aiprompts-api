@@ -130,6 +130,14 @@
             color: #c0392b;
             border: 1px solid var(--error-color);
         }
+        #response-area a {
+            color: inherit; /* Наследуем цвет от родителя (зеленый) */
+            font-weight: 600;
+            text-decoration: underline;
+        }
+        #response-area a:hover {
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>
@@ -276,9 +284,26 @@
                     throw new Error(JSON.stringify(responseData, null, 2));
                 }
 
-
                 responseArea.classList.add('success');
-                responseArea.textContent = `Успех! PR создан. Статус: ${response.status}\n\n${JSON.stringify(responseData, null, 2)}`;
+                // Очищаем старое содержимое
+                responseArea.innerHTML = '';
+                // Создаем текст сообщения
+                const messageNode = document.createElement('p');
+                messageNode.style.margin = '0 0 1rem 0';
+                messageNode.textContent = ✅ Успех! Статус: ${response.status}. Pull Request успешно создан.;
+                responseArea.appendChild(messageNode);
+                // Создаем кликабельную ссылку на Pull Request
+                if (responseData.pullRequestUrl) {
+                const linkNode = document.createElement('a');
+                linkNode.href = responseData.pullRequestUrl;
+                linkNode.textContent = responseData.pullRequestUrl;
+                linkNode.target = '_blank'; // Открывать в новой вкладке
+                linkNode.rel = 'noopener noreferrer';
+                responseArea.appendChild(linkNode);
+                } else {
+                // Если по какой-то причине URL не пришел, показываем сырой JSON
+                responseArea.textContent += \n\n${JSON.stringify(responseData, null, 2)};
+                }
 
                 currentUUID = '';
                 updateJsonPreview();
