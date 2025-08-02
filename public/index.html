@@ -276,13 +276,24 @@
                     
                     responseArea.classList.add('success');
                     responseArea.textContent = `Успех! Статус: ${response.status}\n\n${JSON.stringify(responseData, null, 2)}`;
-                    
+
                     currentUUID = '';
                     updateJsonPreview();
 
                 } catch (error) {
                     responseArea.classList.add('error');
-                    responseArea.textContent = `Ошибка!\n\n${error.message}`;
+                    let errorMessage = `Ошибка!\n\n${error.message}`;
+
+                    // Пытаемся извлечь JSON из сообщения, если он там есть
+                    try {
+                        // Ошибка от fetch содержит JSON в виде строки, и мы его парсим
+                        const errorJson = JSON.parse(error.message);
+                        errorMessage = `Ошибка!\n\nСтатус: ${errorJson.status || 'N/A'}\n\n${JSON.stringify(errorJson, null, 2)}`;
+                    } catch (e) {
+                        // Если не получилось, оставляем как есть. Это была не JSON-ошибка.
+                    }
+
+                    responseArea.textContent = errorMessage;
                 } finally {
                     submitBtn.disabled = false;
                     submitBtn.classList.remove('loading');
