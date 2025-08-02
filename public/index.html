@@ -133,175 +133,178 @@
     </style>
 </head>
 <body>
-    <main>
-        <h1>AIPrompts API Tester</h1>
-        <form id="prompt-form">
-            <div class="form-group">
-                <label for="title">Title (обязательно)</label>
-                <input type="text" id="title" name="title" required value="Промпт для создания логотипа">
-            </div>
+<main>
+    <h1>AIPrompts API Tester</h1>
+    <form id="prompt-form">
+        <div class="form-group">
+            <label for="title">Title (обязательно)</label>
+            <input type="text" id="title" name="title" required value="Промпт для создания логотипа">
+        </div>
 
-            <div class="form-group">
-                <label for="version">Version (обязательно)</label>
-                <input type="text" id="version" name="version" required value="1.0.0">
-            </div>
-            
-            <div class="form-group">
-                <label for="category">Category (обязательно)</label>
-                <input type="text" id="category" name="category" required value="design">
-            </div>
-            
-            <div class="form-group">
-                <label for="tags">Tags (через запятую)</label>
-                <input type="text" id="tags" name="tags" value="logo, startup, vector">
-            </div>
+        <div class="form-group">
+            <label for="version">Version (обязательно)</label>
+            <input type="text" id="version" name="version" required value="1.0.0">
+        </div>
 
-            <div class="form-group">
-                <label for="description">Description</label>
-                <textarea id="description" name="description">Создает минималистичный векторный логотип для IT-стартапа.</textarea>
-            </div>
-            
-            <div class="form-group">
-                <label for="content_ru">Content (RU)</label>
-                <textarea id="content_ru" name="content_ru">Сгенерируй 5 вариантов логотипа для компании 'NexaTech'. Логотип должен быть в стиле минимализм, использовать синий и серый цвета.</textarea>
-            </div>
-             <div class="form-group">
-                <label for="content_en">Content (EN)</label>
-                <textarea id="content_en" name="content_en">Generate 5 logo options for 'NexaTech' company. The logo should be in a minimalist style, using blue and gray colors.</textarea>
-            </div>
-            
-            <button type="submit" id="submit-btn">
-                <span class="button-text">Отправить на модерацию</span>
-                <div class="spinner"></div>
-            </button>
-        </form>
+        <div class="form-group">
+            <label for="category">Category (обязательно)</label>
+            <input type="text" id="category" name="category" required value="design">
+        </div>
 
-        <h2>Предпросмотр JSON</h2>
-        <pre id="json-preview" class="preview-area json-preview"></pre>
-        
-        <h2>Ответ Сервера</h2>
-        <pre id="response-area" class="preview-area" aria-live="polite"></pre>
-    </main>
+        <div class="form-group">
+            <label for="tags">Tags (через запятую)</label>
+            <input type="text" id="tags" name="tags" value="logo, startup, vector">
+        </div>
 
-    <script>
-        // === КОНФИГУРАЦИЯ: УКАЖИТЕ URL ВАШЕГО API ===
-        const API_URL = 'https://aipromptsapi.vercel.app/api/create-prompt-issue'; 
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            const form = document.getElementById('prompt-form');
-            const submitBtn = document.getElementById('submit-btn');
-            const jsonPreview = document.getElementById('json-preview');
-            const responseArea = document.getElementById('response-area');
-            let currentUUID = '';
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description"
+                      name="description">Создает минималистичный векторный логотип для IT-стартапа.</textarea>
+        </div>
 
-            function generateUUID() {
-                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-                    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-                    return v.toString(16);
-                });
-            }
+        <div class="form-group">
+            <label for="content_ru">Content (RU)</label>
+            <textarea id="content_ru" name="content_ru">Сгенерируй 5 вариантов логотипа для компании 'NexaTech'. Логотип должен быть в стиле минимализм, использовать синий и серый цвета.</textarea>
+        </div>
+        <div class="form-group">
+            <label for="content_en">Content (EN)</label>
+            <textarea id="content_en" name="content_en">Generate 5 logo options for 'NexaTech' company. The logo should be in a minimalist style, using blue and gray colors.</textarea>
+        </div>
 
-            // === Функция для сборки JSON по полной структуре ===
-            function updateJsonPreview() {
-                if (!currentUUID) {
-                    currentUUID = generateUUID();
-                }
-                const formData = new FormData(form);
-                const now = new Date();
-                // Важно: .toISOString() всегда возвращает время в формате UTC (Z на конце)
-                const timestamp = now.toISOString();
+        <button type="submit" id="submit-btn">
+            <span class="button-text">Отправить на модерацию</span>
+            <div class="spinner"></div>
+        </button>
+    </form>
 
-                // Собираем полный payload, включая все обязательные поля
-                const payload = {
-                    // Переименовано в `uuid` для соответствия с бэкендом
-                    uuid: currentUUID,
-                    title: formData.get('title'),
-                    version: formData.get('version'),
-                    // Статус и флаги по умолчанию
-                    status: "active",
-                    is_local: false,
-                    is_favorite: false,
-                    description: formData.get('description'),
-                    content: {
-                        ru: formData.get('content_ru'),
-                        en: formData.get('content_en'),
-                    },
-                    // Поля-заглушки, которые должны быть в структуре
-                    compatible_models: [],
-                    category: formData.get('category'),
-                    tags: formData.get('tags').split(',').map(tag => tag.trim()).filter(tag => tag),
-                    variables: [],
-                    metadata: {
-                        author: { id: "", name: "WebApp Tester" },
-                        source: "WebApp",
-                        notes: ""
-                    },
-                    rating: {
-                        score: 0.0,
-                        votes: 0
-                    },
-                    // Временные метки в формате UTC ISO 8601
-                    created_at: timestamp,
-                    updated_at: timestamp,
-                };
-                
-                jsonPreview.textContent = JSON.stringify(payload, null, 2);
-                return payload;
-            }
+    <h2>Предпросмотр JSON</h2>
+    <pre id="json-preview" class="preview-area json-preview"></pre>
 
-            form.addEventListener('input', updateJsonPreview);
-            updateJsonPreview();
+    <h2>Ответ Сервера</h2>
+    <pre id="response-area" class="preview-area" aria-live="polite"></pre>
+</main>
 
-            form.addEventListener('submit', async (event) => {
-                event.preventDefault();
-                submitBtn.disabled = true;
-                submitBtn.classList.add('loading');
-                responseArea.textContent = '';
-                responseArea.className = 'preview-area';
+<script>
+    // === КОНФИГУРАЦИЯ: УКАЖИТЕ URL ВАШЕГО API ===
+    const API_URL = 'https://aipromptsapi.vercel.app/api/create-prompt-issue';
 
-                const payload = updateJsonPreview();
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('prompt-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const jsonPreview = document.getElementById('json-preview');
+        const responseArea = document.getElementById('response-area');
+        let currentUUID = '';
 
-                try {
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                    });
-
-                    const responseData = await response.json();
-
-
-                    if (!response.ok) {
-                        throw new Error(JSON.stringify(responseData, null, 2));
-                    }
-                    
-                    
-                    responseArea.classList.add('success');
-                    responseArea.textContent = `Успех! PR создан. Статус: ${response.status}\n\n${JSON.stringify(responseData, null, 2)}`;
-
-                    currentUUID = '';
-                    updateJsonPreview();
-
-                } catch (error) {
-                    responseArea.classList.add('error');
-                    let errorMessage = `Ошибка!\n\n${error.message}`;
-
-                    // Пытаемся извлечь JSON из сообщения, если он там есть
-                    try {
-                        // Ошибка от fetch содержит JSON в виде строки, и мы его парсим
-                        const errorJson = JSON.parse(error.message);
-                        errorMessage = `Ошибка!\n\nСтатус: ${errorJson.status || 'N/A'}\n\n${JSON.stringify(errorJson, null, 2)}`;
-                    } catch (e) {
-                        // Если не получилось, оставляем как есть. Это была не JSON-ошибка.
-                    }
-
-                    responseArea.textContent = errorMessage;
-                } finally {
-                    submitBtn.disabled = false;
-                    submitBtn.classList.remove('loading');
-                }
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
             });
+        }
+
+        // === Функция для сборки JSON по полной структуре ===
+        function updateJsonPreview() {
+            if (!currentUUID) {
+                currentUUID = generateUUID();
+            }
+            const formData = new FormData(form);
+            const now = new Date();
+            // Важно: .toISOString() всегда возвращает время в формате UTC (Z на конце)
+            const timestamp = now.toISOString();
+
+            // Собираем полный payload, включая все обязательные поля
+            const payload = {
+                // Переименовано в `uuid` для соответствия с бэкендом
+                uuid: currentUUID,
+                title: formData.get('title'),
+                version: formData.get('version'),
+                // Статус и флаги по умолчанию
+                status: "active",
+                is_local: false,
+                is_favorite: false,
+                description: formData.get('description'),
+                content: {
+                    ru: formData.get('content_ru'),
+                    en: formData.get('content_en'),
+                },
+                // Поля-заглушки, которые должны быть в структуре
+                compatible_models: [],
+                category: formData.get('category'),
+                tags: formData.get('tags').split(',').map(tag => tag.trim()).filter(tag => tag),
+                variables: [],
+                metadata: {
+                    author: { id: "", name: "WebApp Tester" },
+                    source: "WebApp",
+                    notes: ""
+                },
+                rating: {
+                    score: 0.0,
+                    votes: 0
+                },
+                // Временные метки в формате UTC ISO 8601
+                created_at: timestamp,
+                updated_at: timestamp,
+            };
+
+            jsonPreview.textContent = JSON.stringify(payload, null, 2);
+            return payload;
+        }
+
+        form.addEventListener('input', updateJsonPreview);
+        updateJsonPreview();
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.classList.add('loading');
+            responseArea.textContent = '';
+            responseArea.className = 'preview-area';
+
+            const payload = updateJsonPreview();
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                const responseData = await response.json();
+
+
+                if (!response.ok) {
+                    throw new Error(JSON.stringify(responseData, null, 2));
+                }
+
+
+                responseArea.classList.add('success');
+                responseArea.textContent = `Успех! PR создан. Статус: ${response.status}\n\n${JSON.stringify(responseData, null, 2)}`;
+
+                currentUUID = '';
+                updateJsonPreview();
+
+           } catch (error) {
+            responseArea.classList.add('error');
+            let displayMessage = `Ошибка!\n\n`;
+
+            // Попытка 1: Разобрать сообщение как JSON (для ошибок от нашего API)
+            try {
+                const errorJson = JSON.parse(error.message);
+                // Достаем внутреннее сообщение, если оно есть
+                const internalMessage = errorJson.details || errorJson.message || 'No details available.';
+                displayMessage += `Статус от API: ${errorJson.status || 'N/A'}\nСообщение: ${internalMessage}`;
+            } catch (jsonError) {
+                // Попытка 2: Если не JSON, просто выводим как есть (для сетевых ошибок и др.)
+                displayMessage += error.message;
+            }
+
+            responseArea.textContent = displayMessage;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('loading');
+            }
         });
-    </script>
+    });
+</script>
 </body>
 </html>
