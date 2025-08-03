@@ -84,53 +84,14 @@ function formatPullRequestBody(data, filePath, oldFilePath = null) {
 function getTimestampWithoutZ(date) { return date.toISOString().slice(0, -1); }
 
 export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-        return res.status(405).end('Method Not Allowed');
-    }
+    if (req.method !== 'POST') { return res.status(405).end('Method Not Allowed'); }
     try {
-        // Схема Zod определяется внутри, чтобы не зависеть от внешних переменных
-        const PromptSchema = z.object({
-            id: z.string().uuid(),
-            title: z.string().min(1),
-            version: z.string().min(1),
-            category: z.string().min(1),
-            description: z.string().optional(),
-            content: z.object({
-                ru: z.string().optional(),
-                en: z.string().optional(),
-            }).passthrough(),
-            prompt_variants: z.array(z.object({
-                variant_id: z.object({
-                    type: z.string().min(1),
-                    id: z.string().min(1),
-                    priority: z.number().optional(),
-                }),
-                content: z.object({ ru: z.string().optional(), en: z.string().optional() }).passthrough(),
-            })).optional(),
-            compatible_models: z.array(z.string()).optional(),
-            tags: z.array(z.string()).optional(),
-            variables: z.array(z.object({
-                name: z.string(),
-                description: z.string().optional(),
-                default_value: z.string().optional(),
-            })).optional(),
-            status: z.string(),
-            is_local: z.boolean(),
-            is_favorite: z.boolean(),
-            metadata: z.any(),
-            rating: z.any(),
-            original_category: z.string().optional(),
-        }).passthrough();
-
         const validationResult = PromptSchema.safeParse(req.body);
         if (!validationResult.success) {
             console.error("Validation Error:", validationResult.error.flatten());
-            return res.status(400).json({
-                error: 'Validation failed',
-                details: validationResult.error.flatten()
-            });
+            return res.status(400).json({ error: 'Validation failed', details: validationResult.error.flatten() });
         }
-
+        
         const incomingData = validationResult.data;
         const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
         const owner = process.env.GITHUB_REPO_OWNER;
@@ -138,7 +99,7 @@ export default async function handler(req, res) {
         const mainBranch = process.env.GITHUB_MAIN_BRANCH || 'main';
 
         const { category: newCategory, original_category: oldCategory } = incomingData;
-        const categoryChanged = oldCategory && newCategory !== oldCategory;
+        const categoryChanged = isEditing && oldCategory && newCategory !== oldCategory;
 
         const newFilePath = `prompts/${newCategory}/${incomingData.id}.json`;
         const oldFilePath = categoryChanged ? `prompts/${oldCategory}/${incomingData.id}.json` : null;
@@ -148,7 +109,8 @@ export default async function handler(req, res) {
         let fileSha = undefined;
 
         try {
-            const pathToGet = oldFilePath || newFilePath;
+            // При обновлении всегда ищем по original_category, если она есть, иначе по новой.
+            const pathToGet = (isEditing && oldCategory) ? `prompts/${oldCategory}/${incomingData.id}.json` : newFilePath;
             const { data: existingFile } = await octokit.rest.repos.getContent({ owner, repo, path: pathToGet, ref: mainBranch });
             fileSha = existingFile.sha;
             isUpdate = true;
@@ -159,60 +121,59 @@ export default async function handler(req, res) {
             isUpdate = false;
             finalData.created_at = getTimestampWithoutZ(new Date());
         }
-
+        
         finalData.updated_at = getTimestampWithoutZ(new Date());
         delete finalData.original_category;
 
         const prTitle = isUpdate ? `Обновление промпта: ${finalData.title}` : `Новый промпт: ${finalData.title}`;
         const newBranchName = `prompts/${isUpdate ? 'update' : 'add'}-${finalData.id.substring(0, 8)}`;
+        
+        const committer = { name: 'AIPrompts API Bot', email: 'bot@aiprompts.dev' };
 
         const mainBranchRef = await octokit.rest.git.getRef({ owner, repo, ref: `heads/${mainBranch}` });
         await octokit.rest.git.createRef({ owner, repo, ref: `refs/heads/${newBranchName}`, sha: mainBranchRef.data.object.sha });
 
         if (categoryChanged) {
+            console.log(`INFO: Moving file from ${oldFilePath} to ${newFilePath}`);
+            // --- ИСПРАВЛЕНИЕ: Добавляем committer в deleteFile ---
             await octokit.rest.repos.deleteFile({
                 owner, repo, path: oldFilePath,
                 message: `chore(prompts): move prompt "${finalData.title}" (delete old)`,
                 sha: fileSha,
                 branch: newBranchName,
-                committer: { name: 'AIPrompts API Bot', email: 'bot@aiprompts.dev' },
+                committer,
             });
+            // Создаем новый файл, SHA не нужен, так как это создание по новому пути
             await octokit.rest.repos.createOrUpdateFileContents({
                 owner, repo, path: newFilePath,
                 message: `feat(prompts): move prompt "${finalData.title}" (create new)`,
                 content: Buffer.from(JSON.stringify(finalData, null, 2)).toString('base64'),
                 branch: newBranchName,
-                committer: { name: 'AIPrompts API Bot', email: 'bot@aiprompts.dev' },
+                committer,
             });
         } else {
+             console.log(`INFO: Creating/updating file at ${newFilePath}`);
             await octokit.rest.repos.createOrUpdateFileContents({
                 owner, repo, path: newFilePath,
                 message: isUpdate ? `fix: update prompt "${finalData.title}"` : `feat: add prompt "${finalData.title}"`,
                 content: Buffer.from(JSON.stringify(finalData, null, 2)).toString('base64'),
                 branch: newBranchName,
                 sha: fileSha,
-                committer: { name: 'AIPrompts API Bot', email: 'bot@aiprompts.dev' },
+                committer,
             });
         }
-
+        
         const prBody = formatPullRequestBody(finalData, newFilePath, oldFilePath);
-        const pr = await octokit.rest.pulls.create({
-            owner, repo,
-            title: prTitle,
-            head: newBranchName,
-            base: mainBranch,
-            body: prBody,
-            maintainer_can_modify: true
-        });
+        const pr = await octokit.rest.pulls.create({ owner, repo, title: prTitle, head: newBranchName, base: mainBranch, body: prBody });
 
-        res.status(201).json({
+        res.status(201).json({ 
             message: 'Pull Request created/updated successfully.',
             pullRequestUrl: pr.data.html_url
         });
 
     } catch (error) {
-        console.error('FATAL Error in create-prompt-issue handler:', error);
-        const errorMessage = process.env.NODE_ENV === 'development' ? error.stack : 'Internal Server Error.';
+        console.error('FATAL Error in create-prompt-issue handler:', error.response?.data || error.stack || error);
+        const errorMessage = process.env.NODE_ENV === 'development' ? (error.response?.data?.message || error.stack) : 'Internal Server Error.';
         res.status(500).json({ error: 'Internal Server Error.', details: errorMessage });
     }
 }
