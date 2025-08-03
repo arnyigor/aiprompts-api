@@ -90,7 +90,7 @@ export default async function handler(req, res) {
         if (!validationResult.success) {
             return res.status(400).json({ error: 'Validation failed', details: validationResult.error.flatten() });
         }
-
+        
         const incomingData = validationResult.data;
         const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
         const owner = process.env.GITHUB_REPO_OWNER;
@@ -140,11 +140,11 @@ export default async function handler(req, res) {
                 const { data: existingFile } = await octokit.rest.repos.getContent({ owner, repo, path: newFilePath, ref: mainBranch });
                 const oldContent = JSON.parse(Buffer.from(existingFile.content, 'base64').toString('utf-8'));
                 finalData.created_at = oldContent.created_at || getTimestampWithoutZ(new Date());
-            } catch (e) { /* Игнорируем */ }
+            } catch(e) { /* Игнорируем */ }
         } else {
             finalData.created_at = getTimestampWithoutZ(new Date());
         }
-
+        
         finalData.updated_at = getTimestampWithoutZ(new Date());
         delete finalData.original_category;
 
@@ -162,8 +162,8 @@ export default async function handler(req, res) {
         });
 
         // 5. Создаем новый коммит, который указывает на это новое дерево
-        const commitMessage = isEditing
-            ? `fix(prompts): update prompt "${finalData.title}"`
+        const commitMessage = isEditing 
+            ? `fix(prompts): update prompt "${finalData.title}"` 
             : `feat(prompts): add new prompt "${finalData.title}"`;
         const { data: newCommit } = await octokit.rest.git.createCommit({
             owner, repo,
