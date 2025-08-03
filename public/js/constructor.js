@@ -3,7 +3,10 @@ const CONSTRUCTOR_API_URL = '/api/create-prompt-issue';
 const constructorHtmlTemplate = `
     <form id="prompt-form" novalidate>
         <h2 id="constructor-title" style="text-align: center; color: var(--accent-color); margin-bottom: 2rem;"></h2>
+        <!-- Скрытое поле для ID и для оригинальной категории -->
         <input type="hidden" id="prompt-id" name="prompt-id">
+        <input type="hidden" id="original-category" name="original-category">
+        
         <fieldset>
             <legend>Основная информация</legend>
             <div class="form-grid">
@@ -43,6 +46,7 @@ const constructorHtmlTemplate = `
     </form>
 `;
 
+// promptToEdit - необязательный параметр для режима редактирования
 window.initializeConstructor = function (container, categories = [], promptToEdit = null) {
     container.innerHTML = constructorHtmlTemplate;
 
@@ -61,7 +65,7 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
         variable: (name = '', desc = '', def = '') => `<div class="form-grid" style="width: 100%"><input type="text" placeholder="Имя" data-key="name" value="${name}"/><input type="text" placeholder="Описание" data-key="description" value="${desc}"/><input type="text" placeholder="Значение" data-key="default_value" value="${def}"/></div><button type="button" class="btn-remove">×</button>`,
         variant: () => `<div class="variant-header"><h4>Специфичный вариант</h4><button type="button" class="btn-remove">×</button></div><div class="form-grid"><div class="form-group"><label>Тип</label><input type="text" placeholder="e.g., model" data-key="type" /></div><div class="form-group"><label>ID</label><input type="text" placeholder="e.g., gpt-4" data-key="id" /></div><div class="form-group"><label>Приоритет</label><input type="number" placeholder="e.g., 1" data-key="priority" /></div></div><div class="form-group form-group-editor"><label>Контент (RU)</label><textarea data-key="content_ru"></textarea><button type="button" class="btn-editor-preview" data-editor-target-dynamic="content_ru">👁️</button></div><div class="form-group form-group-editor"><label>Контент (EN)</label><textarea data-key="content_en"></textarea><button type="button" class="btn-editor-preview" data-editor-target-dynamic="content_en">👁️</button></div>`
     };
-
+    
     function addItem(listContainer, templateHtml) {
         const item = document.createElement('div');
         item.className = templateHtml.includes('variant-header') ? 'variant-item' : 'dynamic-item';
@@ -79,6 +83,7 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
             currentId = (() => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }))();
         }
         const formData = new FormData(form);
+        const originalCategory = form.querySelector('#original-category').value;
         return {
             id: currentId,
             title: formData.get('title'),
@@ -96,10 +101,14 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
             variables: Array.from(container.querySelectorAll('#variables-list .dynamic-item')).map(item => ({ name: item.querySelector('[data-key="name"]').value, description: item.querySelector('[data-key="description"]').value, default_value: item.querySelector('[data-key="default_value"]').value })).filter(v => v.name),
             metadata: { author: { id: "", name: "WebApp Contributor" }, source: "WebApp", notes: "" },
             rating: { score: 0.0, votes: 0 },
-            // ДАТЫ ПОЛНОСТЬЮ УДАЛЕНЫ. ИХ УСТАНАВЛИВАЕТ СЕРВЕР.
+            // Добавляем original_category только в режиме редактирования
+            original_category: isEditing ? originalCategory : undefined
         };
     }
-    function updateJsonPreview() { jsonPreview.textContent = JSON.stringify(gatherPayload(), null, 2); }
+
+    function updateJsonPreview() {
+        jsonPreview.textContent = JSON.stringify(gatherPayload(), null, 2);
+    }
 
     function validateForm() {
         let isValid = true;
@@ -131,8 +140,15 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
         form.querySelector('#description').value = promptToEdit.description || '';
         form.querySelector('#content_ru').value = promptToEdit.content?.ru || '';
         form.querySelector('#content_en').value = promptToEdit.content?.en || '';
+        
         populateCategories();
         categorySelect.value = promptToEdit.category || '';
+        // Запоминаем исходную категорию в скрытом поле
+        form.querySelector('#original-category').value = promptToEdit.category || '';
+        
+        // Поле категории теперь всегда доступно для редактирования
+        categorySelect.disabled = false;
+
         (promptToEdit.tags || []).forEach(tag => addItem(container.querySelector('#tags-list'), itemTemplates.simple(tag)));
         (promptToEdit.compatible_models || []).forEach(model => addItem(container.querySelector('#models-list'), itemTemplates.simple(model)));
         (promptToEdit.variables || []).forEach(v => addItem(container.querySelector('#variables-list'), itemTemplates.variable(v.name, v.description, v.default_value)));
@@ -149,6 +165,7 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
         });
     } else {
         populateCategories();
+        categorySelect.disabled = false;
     }
 
     form.addEventListener('click', (e) => {
@@ -183,11 +200,14 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
-        if (!validateForm()) { alert('Пожалуйста, заполните все обязательные поля.'); return; }
+        if (!validateForm()) {
+            alert('Пожалуйста, заполните все обязательные поля.');
+            return;
+        }
         const submitBtn = form.querySelector('#submit-btn');
         submitBtn.disabled = true;
         submitBtn.classList.add('loading');
-
+        
         const payload = gatherPayload(true);
         try {
             const response = await fetch(CONSTRUCTOR_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -200,14 +220,14 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
 
             const successMessage = `**Pull Request успешно создан!**\n\nВы можете посмотреть его по ссылке:\n[${responseData.pullRequestUrl}](${responseData.pullRequestUrl})`;
             if (window.showAlert) window.showAlert('✅ Успех!', successMessage, false);
-
+            
             if (window.initializeConstructor) {
                 window.initializeConstructor(container, categories);
             }
         } catch (error) {
             console.error("Ошибка при отправке формы:", error);
             if (!error.message.includes('Server returned an error')) {
-                if (window.showAlert) window.showAlert('❌ Критическая ошибка', `Произошла непредвиденная ошибка. Подробности в консоли.`, true);
+                 if (window.showAlert) window.showAlert('❌ Критическая ошибка', `Произошла непредвиденная ошибка. Подробности в консоли.`, true);
             }
         } finally {
             submitBtn.disabled = false;
