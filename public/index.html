@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
+
 <body>
     <div class="container">
         <header>
@@ -17,15 +19,16 @@
             </nav>
         </header>
         <main>
+            <!-- ЭКРАН 1: СПИСОК ПРОМПТОВ -->
             <div id="list-view" class="view active">
                 <div id="filter-bar">
                     <input type="search" id="search-input" placeholder="Поиск по названию, описанию, тегам...">
                     <div id="category-filters"></div>
                 </div>
-                <div id="prompt-list-container">
-                    <div id="loader">Загрузка промптов...</div>
-                    <div id="prompt-grid" class="hidden"></div>
-                </div>
+
+                <!-- ИСПРАВЛЕННАЯ СТРУКТУРА -->
+                <div id="loader">Загрузка промптов...</div>
+                <div id="prompt-grid" class="hidden"></div>
             </div>
             <div id="constructor-view" class="view">
                 <!-- Контент будет вставлен сюда -->
@@ -52,4 +55,5 @@
     <script src="js/constructor.js"></script>
     <script src="js/app.js"></script>
 </body>
+
 </html>

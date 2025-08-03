@@ -123,11 +123,18 @@ nav {
     border-color: var(--accent-color);
 }
 
-#prompt-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1.5rem;
-    align-items: stretch;
+#prompt-grid { 
+    display: grid !important; /* Убеждаемся, что сетка всегда будет grid */
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); 
+    gap: 1.5rem; 
+    align-items: stretch; 
+    width: 100%; /* Добавляем ширину на всякий случай */
+    min-height: 100px; /* Добавляем минимальную высоту, чтобы он не был "схлопнут" */
+}
+
+/* Это правило должно быть отдельно */
+#prompt-grid.hidden {
+    display: none !important;
 }
 
 .prompt-card {

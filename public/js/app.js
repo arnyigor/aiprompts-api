@@ -1,9 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- КОНФИГУРАЦИИ И ГЛОБАЛЬНОЕ СОСТОЯНИЕ ---
     const GITHUB_API_BASE = '/api/get-prompts';
-    let allPrompts = [];
+    window.allPrompts = [];
     let allCategories = [];
     let onModalSaveCallback = null;
+    let constructorInitialized = false;
 
     // --- ЭЛЕМЕНТЫ DOM ---
     const views = {
@@ -16,12 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('search-input');
     const categoryFilters = document.getElementById('category-filters');
 
-    // Модальное окно просмотра/редактирования
     const promptModal = document.getElementById('prompt-modal');
     const promptModalBody = document.getElementById('modal-body');
     const promptModalCloseBtn = promptModal.querySelector('.modal-close-btn');
 
-    // Новое модальное окно уведомлений
     const alertModal = document.getElementById('alert-modal');
     const alertModalBody = document.getElementById('alert-modal-body');
     const alertModalCloseBtn = alertModal.querySelector('.modal-close-btn');
@@ -46,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
         promptGrid.addEventListener('click', (e) => {
             const card = e.target.closest('.prompt-card');
             if (card && card.dataset.promptId) {
-                const prompt = allPrompts.find(p => p.id === card.dataset.promptId);
+                const prompt = window.allPrompts.find(p => p.id === card.dataset.promptId);
                 if (prompt && window.openModalWithPromptData) {
                     window.openModalWithPromptData(prompt);
                 }
@@ -63,14 +62,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error((await response.json()).error || 'Не удалось загрузить промпты');
 
             const rawData = await response.json();
-            allPrompts = rawData.filter(p => p && (p.id || p.uuid)).map(p => {
+            window.allPrompts = rawData.filter(p => p && (p.id || p.uuid)).map(p => {
                 if (!p.id && p.uuid) p.id = p.uuid;
                 return p;
             });
 
-            allCategories = [...new Set(allPrompts.map(p => p.category).filter(Boolean))].sort();
+            allCategories = [...new Set(window.allPrompts.map(p => p.category).filter(Boolean))].sort();
+
             renderCategories();
             applyFilters();
+
+            // Если конструктор уже был открыт с пустыми категориями, обновляем их
+            if (constructorInitialized && window.updateConstructorCategories) {
+                window.updateConstructorCategories(allCategories);
+            }
 
         } catch (error) {
             console.error("Ошибка при загрузке промптов:", error);
@@ -108,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const searchTerm = searchInput.value.toLowerCase();
         const activeCategoryBtn = categoryFilters.querySelector('.category-btn.active');
         const activeCategory = activeCategoryBtn ? activeCategoryBtn.dataset.category : 'all';
-        let filteredPrompts = allPrompts;
+        let filteredPrompts = window.allPrompts;
         if (activeCategory !== 'all') {
             filteredPrompts = filteredPrompts.filter(p => p.category === activeCategory);
         }
@@ -134,35 +139,42 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeModal(modalElement) {
         if (modalElement) {
             modalElement.classList.remove('visible');
-            // Даем время на завершение анимации перед полным скрытием
-            setTimeout(() => {
-                if (!modalElement.classList.contains('visible')) {
-                    modalElement.classList.add('hidden');
-                }
-            }, 300); // Должно совпадать со временем transition в CSS
-
+            modalElement.classList.add('hidden');
             if (!document.querySelector('.modal-overlay.visible')) {
                 document.body.style.overflow = '';
             }
         }
     }
 
-    // Новая глобальная функция для показа уведомлений
-    // public/js/app.js
+
     window.showAlert = function (title, message, isError = false) {
         if (!alertModalBody) return;
 
         let finalMessage = message;
-        // --- НОВОЕ: Пытаемся красиво отформатировать ошибку валидации ---
-        try {
-            const errorJson = JSON.parse(message);
-            if (errorJson.error === 'Validation failed' && errorJson.details?.fieldErrors) {
-                finalMessage = "Обнаружены следующие ошибки:\n\n";
-                for (const [field, errors] of Object.entries(errorJson.details.fieldErrors)) {
-                    finalMessage += `- **Поле \`${field}\`:** ${errors.join(', ')}\n`;
+
+        // --- НОВАЯ, УПРОЩЕННАЯ ЛОГИКА ---
+        if (isError) {
+            try {
+                const errorJson = JSON.parse(message);
+
+                // Сценарий 1: Ошибка валидации от Zod - показываем детали
+                if (errorJson.error === 'Validation failed' && errorJson.details?.fieldErrors) {
+                    finalMessage = "Обнаружены следующие ошибки:\n\n";
+                    for (const [field, errors] of Object.entries(errorJson.details.fieldErrors)) {
+                        finalMessage += `- **Поле \`${field}\`:** ${errors.join(', ')}\n`;
+                    }
                 }
+                // Сценарий 2: Любая другая ошибка с сервера (включая 500)
+                else {
+                    // Просто показываем поле "error" из JSON, если оно есть.
+                    // Если нет, показываем всё сообщение.
+                    finalMessage = errorJson.error || message;
+                }
+            } catch (e) {
+                // Оставляем как есть, если это не JSON
+                finalMessage = message;
             }
-        } catch (e) { /* Игнорируем, если это не JSON */ }
+        }
 
         alertModalBody.innerHTML = `
         <h2 class="${isError ? 'error' : 'success'}">${title}</h2>
@@ -173,29 +185,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openSharedModal(promptData, isEditorMode) {
         if (!promptData) return;
-
         promptModal.classList.toggle('is-editor-mode', isEditorMode);
-
         const createPromptBlock = (title, contentObj) => {
             const rawContent = (contentObj.ru || contentObj.en || '');
             const htmlContent = window.marked ? window.marked.parse(rawContent) : rawContent;
             const textareaIsReadonly = isEditorMode ? '' : 'readonly';
             return `
-            <div class="prompt-view-block">
-                <div class="prompt-view-header">
-                    <h4>${title}</h4>
-                    <div class="view-toggle">
-                        <button class="toggle-btn active" data-view="rendered">Вид</button>
-                        <button class="toggle-btn" data-view="raw">Исходник</button>
+                <div class="prompt-view-block">
+                    <div class="prompt-view-header">
+                        <h4>${title}</h4>
+                        <div class="view-toggle">
+                            <button class="toggle-btn active" data-view="rendered">Вид</button>
+                            <button class="toggle-btn" data-view="raw">Исходник</button>
+                        </div>
+                        <button class="btn-copy">Копировать</button>
                     </div>
-                    <button class="btn-copy">Копировать</button>
+                    <div class="prompt-view-content-wrapper">
+                        <div class="prompt-rendered-view markdown-preview active">${htmlContent}</div>
+                        <textarea class="prompt-raw-view hidden" ${textareaIsReadonly}>${rawContent}</textarea>
+                    </div>
                 </div>
-                <div class="prompt-view-content-wrapper">
-                    <div class="prompt-rendered-view markdown-preview active">${htmlContent}</div>
-                    <textarea class="prompt-raw-view hidden" ${textareaIsReadonly}>${rawContent}</textarea>
-                </div>
-            </div>
-        `;
+            `;
         };
         let variantsHtml = '';
         if (!isEditorMode && promptData.prompt_variants?.length > 0) {
@@ -204,25 +214,22 @@ document.addEventListener('DOMContentLoaded', () => {
             ).join('');
         }
         const footerHtml = isEditorMode
-            ? `<div class="modal-footer"><button class="btn-save-modal">Сохранить изменения</button></div>`
+            ? `<div class="modal-footer"><button class="btn-save-modal">Сохранить</button></div>`
             : (promptData.created_at ? `<div class="modal-footer"><button class="btn-edit" data-edit-id="${promptData.id}">Редактировать</button></div>` : '');
 
         promptModalBody.innerHTML = `
-        <div class="modal-header">
-            <h2>${promptData.title}</h2>
-            ${!isEditorMode ? `<div class="modal-meta"><span><strong>Категория:</strong> ${promptData.category}</span><span><strong>Версия:</strong> ${promptData.version}</span><span><strong>ID:</strong> ${promptData.id || ''}</span></div>` : ''}
-        </div>
-        ${createPromptBlock(isEditorMode ? 'Контент' : 'Базовый промпт', promptData.content)}
-        ${variantsHtml}
-        ${footerHtml}
+            <div class="modal-header">
+                <h2>${promptData.title}</h2>
+                ${!isEditorMode ? `<div class="modal-meta"><span><strong>Категория:</strong> ${promptData.category}</span><span><strong>Версия:</strong> ${promptData.version}</span><span><strong>ID:</strong> ${promptData.id || ''}</span></div>` : ''}
+            </div>
+            ${createPromptBlock(isEditorMode ? 'Контент' : 'Базовый промпт', promptData.content)}
+            ${variantsHtml}
+            ${footerHtml}
         `;
         openModal(promptModal);
     }
 
-    window.openModalWithPromptData = function (promptData) {
-        openSharedModal(promptData, false);
-    };
-
+    window.openModalWithPromptData = function (promptData) { openSharedModal(promptData, false); };
     window.openModalWithEditor = function (text, onSave) {
         const virtualPrompt = { title: "Редактор Markdown", content: { ru: text } };
         onModalSaveCallback = onSave;
@@ -230,31 +237,27 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     function setupModalListeners() {
-        // Закрытие окна просмотра
         promptModalCloseBtn.addEventListener('click', () => closeModal(promptModal));
+        alertModalCloseBtn.addEventListener('click', () => closeModal(alertModal));
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal(promptModal);
+                closeModal(alertModal);
+            }
+        });
+
         promptModal.addEventListener('click', (e) => {
             if (e.target === promptModal && !promptModal.classList.contains('is-editor-mode')) {
                 closeModal(promptModal);
             }
         });
-
-        // Закрытие окна уведомлений
-        alertModalCloseBtn.addEventListener('click', () => closeModal(alertModal));
         alertModal.addEventListener('click', (e) => {
             if (e.target === alertModal) {
                 closeModal(alertModal);
             }
         });
 
-        // Закрытие любого активного окна по Escape
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                const visibleModal = document.querySelector('.modal-overlay.visible');
-                if (visibleModal) closeModal(visibleModal);
-            }
-        });
-
-        // Обработчики кнопок внутри окна ПРОСМОТРА (теперь это promptModal)
         promptModal.addEventListener('click', async (e) => {
             const target = e.target;
             const promptBlock = target.closest('.prompt-view-block');
@@ -281,19 +284,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (target.matches('.btn-edit')) {
                 const promptId = target.dataset.editId;
-                const promptToEdit = allPrompts.find(p => p.id === promptId);
+                const promptToEdit = window.allPrompts.find(p => p.id === promptId);
                 if (promptToEdit) {
                     closeModal(promptModal);
-                    // Вручную переключаем вид
+                    if (window.initializeConstructor) {
+                        window.initializeConstructor(views.constructor, allCategories, promptToEdit);
+                    }
                     navLinks.forEach(l => l.classList.remove('active'));
                     const constructorLink = document.querySelector('.nav-link[data-view="constructor-view"]');
                     if (constructorLink) constructorLink.classList.add('active');
                     Object.values(views).forEach(v => v.classList.remove('active'));
                     views.constructor.classList.add('active');
-                    // Пересоздаем конструктор с данными
-                    if (window.initializeConstructor) {
-                        window.initializeConstructor(views.constructor, allCategories, promptToEdit);
-                    }
                 }
             }
 
@@ -319,9 +320,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const viewKey = targetViewId.split('-')[0];
                 if (views[viewKey]) views[viewKey].classList.add('active');
 
-                if (targetViewId === 'constructor-view') {
+                if (targetViewId === 'constructor-view' && !constructorInitialized) {
                     if (window.initializeConstructor) {
                         window.initializeConstructor(views.constructor, allCategories, null);
+                        constructorInitialized = true;
                     }
                 }
             });
