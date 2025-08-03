@@ -3,10 +3,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const GITHUB_API_BASE = '/api/get-prompts';
     let allPrompts = [];
     let allCategories = [];
-    let constructorInitialized = false;
+    let onModalSaveCallback = null;
 
     // --- ЭЛЕМЕНТЫ DOM ---
-    const views = { list: document.getElementById('list-view'), constructor: document.getElementById('constructor-view') };
+    const views = {
+        list: document.getElementById('list-view'),
+        constructor: document.getElementById('constructor-view')
+    };
     const navLinks = document.querySelectorAll('.nav-link');
     const loader = document.getElementById('loader');
     const promptGrid = document.getElementById('prompt-grid');
@@ -36,7 +39,10 @@ document.addEventListener('DOMContentLoaded', () => {
         promptGrid.addEventListener('click', (e) => {
             const card = e.target.closest('.prompt-card');
             if (card && card.dataset.promptId) {
-                openModalWithPrompt(card.dataset.promptId);
+                const prompt = allPrompts.find(p => p.id === card.dataset.promptId);
+                if (prompt && window.openModalWithPromptData) {
+                    window.openModalWithPromptData(prompt);
+                }
             }
         });
         fetchAllPrompts();
@@ -48,15 +54,13 @@ document.addEventListener('DOMContentLoaded', () => {
             promptGrid.classList.add('hidden');
             const response = await fetch(GITHUB_API_BASE);
             if (!response.ok) throw new Error((await response.json()).error || 'Не удалось загрузить промпты');
-            
+
             const rawData = await response.json();
-            allPrompts = rawData
-                .filter(p => p && (p.id || p.uuid))
-                .map(p => {
-                    if (!p.id && p.uuid) p.id = p.uuid;
-                    return p;
-                });
-            
+            allPrompts = rawData.filter(p => p && (p.id || p.uuid)).map(p => {
+                if (!p.id && p.uuid) p.id = p.uuid;
+                return p;
+            });
+
             allCategories = [...new Set(allPrompts.map(p => p.category).filter(Boolean))].sort();
             renderCategories();
             applyFilters();
@@ -102,70 +106,160 @@ document.addEventListener('DOMContentLoaded', () => {
             filteredPrompts = filteredPrompts.filter(p => p.category === activeCategory);
         }
         if (searchTerm) {
-            filteredPrompts = filteredPrompts.filter(p => 
-                (p.title || '').toLowerCase().includes(searchTerm) || 
-                (p.description || '').toLowerCase().includes(searchTerm) || 
+            filteredPrompts = filteredPrompts.filter(p =>
+                (p.title || '').toLowerCase().includes(searchTerm) ||
+                (p.description || '').toLowerCase().includes(searchTerm) ||
                 (p.tags || []).some(tag => tag.toLowerCase().includes(searchTerm))
             );
         }
         renderPrompts(filteredPrompts);
     }
-    
+
     // --- ЛОГИКА МОДАЛЬНОГО ОКНА ---
-    function openModalWithPrompt(id) {
-        const prompt = allPrompts.find(p => p.id === id);
-        if (!prompt) {
-            console.error(`Промпт с ID ${id} не найден.`);
-            return;
-        }
+    function openModal(promptData, isEditorMode) {
+        if (!promptData) return;
+
+        // --- ИЗМЕНЕНИЕ: Добавляем/убираем класс в зависимости от режима ---
+        modal.classList.toggle('is-editor-mode', isEditorMode);
+
         const createPromptBlock = (title, contentObj) => {
-            const lang = contentObj.ru ? 'ru' : 'en';
-            const content = contentObj[lang] || 'Контент отсутствует.';
-            const elementId = `prompt-text-${Math.random().toString(36).substr(2, 9)}`;
-            return `<div class="prompt-view-block"><div class="prompt-view-header"><h4>${title}</h4><button class="btn-copy" data-clipboard-target="#${elementId}">Копировать</button></div><div class="prompt-view-content" id="${elementId}">${content}</div></div>`;
+            const rawContent = (contentObj.ru || contentObj.en || '');
+            const htmlContent = window.marked ? window.marked.parse(rawContent) : rawContent;
+            // В режиме редактора textarea должна быть редактируемой
+            const textareaIsReadonly = isEditorMode ? '' : 'readonly';
+            return `
+            <div class="prompt-view-block">
+                <div class="prompt-view-header">
+                    <h4>${title}</h4>
+                    <div class="view-toggle">
+                        <button class="toggle-btn active" data-view="rendered">Вид</button>
+                        <button class="toggle-btn" data-view="raw">Исходник</button>
+                    </div>
+                    <button class="btn-copy">Копировать</button>
+                </div>
+                <div class="prompt-view-content-wrapper">
+                    <div class="prompt-rendered-view markdown-preview active">${htmlContent}</div>
+                    <textarea class="prompt-raw-view hidden" ${textareaIsReadonly}>${rawContent}</textarea>
+                </div>
+            </div>
+        `;
         };
         let variantsHtml = '';
-        if (prompt.prompt_variants?.length > 0) {
-            variantsHtml = prompt.prompt_variants.map(variant =>
+        if (!isEditorMode && promptData.prompt_variants?.length > 0) {
+            variantsHtml = promptData.prompt_variants.map((variant) =>
                 createPromptBlock(`Вариант (тип: ${variant.variant_id.type}, id: ${variant.variant_id.id})`, variant.content)
             ).join('');
         }
+        const footerHtml = isEditorMode
+            ? `<div class="modal-footer"><button class="btn-save-modal">Сохранить изменения</button></div>`
+            : (promptData.created_at ? `<div class="modal-footer"><button class="btn-edit" data-edit-id="${promptData.id}">Редактировать</button></div>` : '');
+
         modalBody.innerHTML = `
-            <div class="modal-header">
-                <h2>${prompt.title}</h2>
-                <div class="modal-meta"><span><strong>Категория:</strong> ${prompt.category}</span><span><strong>Версия:</strong> ${prompt.version}</span><span><strong>ID:</strong> ${prompt.id}</span></div>
-            </div>
-            ${createPromptBlock('Базовый промпт', prompt.content)}
-            ${variantsHtml}
-        `;
+        <div class="modal-header">
+            <h2>${promptData.title}</h2>
+            ${!isEditorMode ? `<div class="modal-meta"><span><strong>Категория:</strong> ${promptData.category}</span><span><strong>Версия:</strong> ${promptData.version}</span><span><strong>ID:</strong> ${promptData.id || ''}</span></div>` : ''}
+        </div>
+        ${createPromptBlock(isEditorMode ? 'Контент' : 'Базовый промпт', promptData.content)}
+        ${variantsHtml}
+        ${footerHtml}
+    `;
         modal.classList.add('visible');
         document.body.style.overflow = 'hidden';
     }
+    window.openModalWithPromptData = function (promptData) {
+        openModal(promptData, false);
+    };
+
+    window.openModalWithEditor = function (text, onSave) {
+        const virtualPrompt = { title: "Редактор Markdown", content: { ru: text } };
+        onModalSaveCallback = onSave;
+        openModal(virtualPrompt, true);
+    };
 
     function closeModal() {
+        onModalSaveCallback = null;
         modal.classList.remove('visible');
+        modal.classList.remove('is-editor-mode');
         document.body.style.overflow = '';
     }
 
     function setupModalListeners() {
         modal.addEventListener('click', async (e) => {
-            if (e.target.matches('.btn-copy')) {
-                const targetSelector = e.target.dataset.clipboardTarget;
-                const contentElement = document.querySelector(targetSelector);
-                if (!contentElement) return;
+            const target = e.target;
+            const promptBlock = target.closest('.prompt-view-block');
+
+            // --- Обработчик для переключателя Вид/Исходник ---
+            if (target.matches('.toggle-btn')) {
+                if (target.classList.contains('active') || !promptBlock) return;
+                const viewType = target.dataset.view;
+                const wrapper = promptBlock.querySelector('.prompt-view-content-wrapper');
+                promptBlock.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
+                target.classList.add('active');
+                wrapper.querySelector('.prompt-rendered-view').classList.toggle('hidden', viewType !== 'rendered');
+                wrapper.querySelector('.prompt-raw-view').classList.toggle('hidden', viewType !== 'raw');
+            }
+
+            // --- Обработчик для кнопки "Копировать" ---
+            if (target.matches('.btn-copy')) {
+                const rawView = promptBlock?.querySelector('.prompt-raw-view');
+                if (!rawView) return;
                 try {
-                    await navigator.clipboard.writeText(contentElement.innerText);
-                    e.target.textContent = 'Скопировано!';
-                    setTimeout(() => { e.target.textContent = 'Копировать'; }, 2000);
+                    await navigator.clipboard.writeText(rawView.value);
+                    target.textContent = 'Скопировано!';
+                    setTimeout(() => { target.textContent = 'Копировать'; }, 2000);
                 } catch (err) {
                     console.error('Не удалось скопировать текст: ', err);
-                    e.target.textContent = 'Ошибка!';
+                    target.textContent = 'Ошибка!';
                 }
             }
+
+            // --- Обработчик для кнопки "Редактировать" ---
+            if (target.matches('.btn-edit')) {
+                const promptId = target.dataset.editId;
+                const promptToEdit = allPrompts.find(p => p.id === promptId);
+                if (promptToEdit) {
+                    closeModal();
+                    // Вручную переключаем вид, БЕЗ СИМУЛЯЦИИ КЛИКА
+                    navLinks.forEach(l => l.classList.remove('active'));
+                    const constructorLink = document.querySelector('.nav-link[data-view="constructor-view"]');
+                    if (constructorLink) constructorLink.classList.add('active');
+
+                    Object.values(views).forEach(v => v.classList.remove('active'));
+                    views.constructor.classList.add('active');
+
+                    // Пересоздаем конструктор с данными
+                    if (window.initializeConstructor) {
+                        window.initializeConstructor(views.constructor, allCategories, promptToEdit);
+                    }
+                }
+            }
+
+            // --- Обработчик для кнопки "Сохранить изменения" (в режиме редактора) ---
+            if (target.matches('.btn-save-modal')) {
+                const newText = modal.querySelector('.prompt-raw-view').value;
+                if (typeof onModalSaveCallback === 'function') {
+                    onModalSaveCallback(newText);
+                }
+                closeModal();
+            }
         });
+
+        // --- Обработчики для закрытия модального окна ---
         modalCloseBtn.addEventListener('click', closeModal);
-        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-        window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('visible')) closeModal(); });
+
+        modal.addEventListener('click', (e) => {
+            // Закрытие по клику на фон работает, только если это НЕ режим редактора
+            if (e.target === modal && !modal.classList.contains('is-editor-mode')) {
+                closeModal();
+            }
+        });
+
+        window.addEventListener('keydown', (e) => {
+            // Закрытие по Escape работает всегда
+            if (e.key === 'Escape' && modal.classList.contains('visible')) {
+                closeModal();
+            }
+        });
     }
 
     // --- ЛОГИКА НАВИГАЦИИ ---
@@ -179,9 +273,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 Object.values(views).forEach(view => view.classList.remove('active'));
                 const viewKey = targetViewId.split('-')[0];
                 if (views[viewKey]) views[viewKey].classList.add('active');
-                if (targetViewId === 'constructor-view' && !constructorInitialized) {
-                    initializeConstructor(views.constructor, allCategories);
-                    constructorInitialized = true;
+
+                if (targetViewId === 'constructor-view') {
+                    if (window.initializeConstructor) {
+                        window.initializeConstructor(views.constructor, allCategories, null);
+                    }
                 }
             });
         });
