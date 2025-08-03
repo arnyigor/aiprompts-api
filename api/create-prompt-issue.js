@@ -164,7 +164,8 @@ export default async function handler(req, res) {
         delete finalData.original_category;
 
         const prTitle = isUpdate ? `Обновление промпта: ${finalData.title}` : `Новый промпт: ${finalData.title}`;
-        const newBranchName = `prompts/${isUpdate ? 'update' : 'add'}-${finalData.id.substring(0, 8)}`;
+        const timestamp = Date.now().toString().slice(-6); // Берем последние 6 цифр миллисекунд
+        const newBranchName = `prompts/${isUpdate ? 'update' : 'add'}-${finalData.id.substring(0, 8)}-${timestamp}`;
 
         const mainBranchRef = await octokit.rest.git.getRef({ owner, repo, ref: `heads/${mainBranch}` });
         await octokit.rest.git.createRef({ owner, repo, ref: `refs/heads/${newBranchName}`, sha: mainBranchRef.data.object.sha });
