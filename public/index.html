@@ -1,13 +1,12 @@
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AIPrompts Hub</title>
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
-
 <body>
     <div class="container">
         <header>
@@ -33,18 +32,24 @@
             </div>
         </main>
     </div>
-    <script src="js/constructor.js"></script>
-    <script src="js/app.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- Каркас для модального окна детального просмотра -->
+
+    <!-- Модальное окно для ПРОСМОТРА -->
     <div id="prompt-modal" class="modal-overlay">
         <div class="modal-content">
             <button class="modal-close-btn">×</button>
-            <div id="modal-body">
-                <!-- Содержимое будет вставлено сюда с помощью JS -->
-            </div>
+            <div id="modal-body"></div>
         </div>
     </div>
-</body>
 
+    <!-- НОВОЕ модальное окно для УВЕДОМЛЕНИЙ -->
+    <div id="alert-modal" class="modal-overlay">
+        <div class="modal-content alert-modal-content">
+            <button class="modal-close-btn">×</button>
+            <div id="alert-modal-body"></div>
+        </div>
+    </div>
+
+    <script src="js/constructor.js"></script>
+    <script src="js/app.js"></script>
+</body>
 </html>

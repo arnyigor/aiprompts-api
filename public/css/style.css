@@ -687,3 +687,29 @@ nav {
     color: var(--accent-color);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
+
+/* --- Стили для модального окна уведомлений --- */
+.alert-modal-content {
+    max-width: 500px;
+    text-align: center;
+}
+.alert-modal-body h2 {
+    margin-top: 0;
+}
+.alert-modal-body .success {
+    color: var(--success-color);
+}
+.alert-modal-body .error {
+    color: var(--error-color);
+}
+.alert-modal-body pre {
+    text-align: left;
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 0.85rem;
+}

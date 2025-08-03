@@ -43,7 +43,6 @@ const constructorHtmlTemplate = `
     </form>
 `;
 
-// promptToEdit - необязательный параметр для режима редактирования
 window.initializeConstructor = function (container, categories = [], promptToEdit = null) {
     container.innerHTML = constructorHtmlTemplate;
 
@@ -80,7 +79,6 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
             currentId = (() => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }))();
         }
         const formData = new FormData(form);
-        const now = new Date().toISOString();
         return {
             id: currentId,
             title: formData.get('title'),
@@ -98,14 +96,10 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
             variables: Array.from(container.querySelectorAll('#variables-list .dynamic-item')).map(item => ({ name: item.querySelector('[data-key="name"]').value, description: item.querySelector('[data-key="description"]').value, default_value: item.querySelector('[data-key="default_value"]').value })).filter(v => v.name),
             metadata: { author: { id: "", name: "WebApp Contributor" }, source: "WebApp", notes: "" },
             rating: { score: 0.0, votes: 0 },
-            created_at: isEditing ? promptToEdit.created_at : now,
-            updated_at: now,
+            // ДАТЫ ПОЛНОСТЬЮ УДАЛЕНЫ. ИХ УСТАНАВЛИВАЕТ СЕРВЕР.
         };
     }
-
-    function updateJsonPreview() {
-        jsonPreview.textContent = JSON.stringify(gatherPayload(), null, 2);
-    }
+    function updateJsonPreview() { jsonPreview.textContent = JSON.stringify(gatherPayload(), null, 2); }
 
     function validateForm() {
         let isValid = true;
@@ -189,32 +183,35 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
-        if (!validateForm()) {
-            alert('Пожалуйста, заполните все обязательные поля.');
-            return;
-        }
+        if (!validateForm()) { alert('Пожалуйста, заполните все обязательные поля.'); return; }
         const submitBtn = form.querySelector('#submit-btn');
         submitBtn.disabled = true;
         submitBtn.classList.add('loading');
-        responseArea.innerHTML = '';
-        responseArea.className = 'preview-area';
+
         const payload = gatherPayload(true);
         try {
             const response = await fetch(CONSTRUCTOR_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const responseData = await response.json();
-            if (!response.ok) throw new Error(JSON.stringify(responseData, null, 2));
-            responseArea.classList.add('success');
-            responseArea.innerHTML = `<p>✅ Успех! Статус: ${response.status}. PR создан.</p><a href="${responseData.pullRequestUrl}" target="_blank" rel="noopener noreferrer">${responseData.pullRequestUrl}</a>`;
-        } catch (error) {
-            responseArea.classList.add('error');
-            responseArea.textContent = `Ошибка!\n\n${error.message}`;
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.classList.remove('loading');
-            currentId = '';
+            if (!response.ok) {
+                const errorMessage = `**Сервер вернул ошибку ${response.status}:**\n\n\`\`\`json\n${JSON.stringify(responseData, null, 2)}\n\`\`\``;
+                if (window.showAlert) window.showAlert('❌ Ошибка отправки', errorMessage, true);
+                throw new Error('Server returned an error');
+            }
+
+            const successMessage = `**Pull Request успешно создан!**\n\nВы можете посмотреть его по ссылке:\n[${responseData.pullRequestUrl}](${responseData.pullRequestUrl})`;
+            if (window.showAlert) window.showAlert('✅ Успех!', successMessage, false);
+
             if (window.initializeConstructor) {
                 window.initializeConstructor(container, categories);
             }
+        } catch (error) {
+            console.error("Ошибка при отправке формы:", error);
+            if (!error.message.includes('Server returned an error')) {
+                if (window.showAlert) window.showAlert('❌ Критическая ошибка', `Произошла непредвиденная ошибка. Подробности в консоли.`, true);
+            }
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('loading');
         }
     });
 

@@ -15,9 +15,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const promptGrid = document.getElementById('prompt-grid');
     const searchInput = document.getElementById('search-input');
     const categoryFilters = document.getElementById('category-filters');
-    const modal = document.getElementById('prompt-modal');
-    const modalBody = document.getElementById('modal-body');
-    const modalCloseBtn = document.querySelector('.modal-close-btn');
+
+    // Модальное окно просмотра/редактирования
+    const promptModal = document.getElementById('prompt-modal');
+    const promptModalBody = document.getElementById('modal-body');
+    const promptModalCloseBtn = promptModal.querySelector('.modal-close-btn');
+
+    // Новое модальное окно уведомлений
+    const alertModal = document.getElementById('alert-modal');
+    const alertModalBody = document.getElementById('alert-modal-body');
+    const alertModalCloseBtn = alertModal.querySelector('.modal-close-btn');
 
     // --- ГЛАВНАЯ ФУНКЦИЯ ИНИЦИАЛИЗАЦИИ ---
     function init() {
@@ -115,17 +122,63 @@ document.addEventListener('DOMContentLoaded', () => {
         renderPrompts(filteredPrompts);
     }
 
-    // --- ЛОГИКА МОДАЛЬНОГО ОКНА ---
-    function openModal(promptData, isEditorMode) {
+    // --- ЛОГИКА МОДАЛЬНЫХ ОКОН ---
+    function openModal(modalElement) {
+        if (modalElement) {
+            modalElement.classList.remove('hidden');
+            modalElement.classList.add('visible');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeModal(modalElement) {
+        if (modalElement) {
+            modalElement.classList.remove('visible');
+            // Даем время на завершение анимации перед полным скрытием
+            setTimeout(() => {
+                if (!modalElement.classList.contains('visible')) {
+                    modalElement.classList.add('hidden');
+                }
+            }, 300); // Должно совпадать со временем transition в CSS
+
+            if (!document.querySelector('.modal-overlay.visible')) {
+                document.body.style.overflow = '';
+            }
+        }
+    }
+
+    // Новая глобальная функция для показа уведомлений
+    // public/js/app.js
+    window.showAlert = function (title, message, isError = false) {
+        if (!alertModalBody) return;
+
+        let finalMessage = message;
+        // --- НОВОЕ: Пытаемся красиво отформатировать ошибку валидации ---
+        try {
+            const errorJson = JSON.parse(message);
+            if (errorJson.error === 'Validation failed' && errorJson.details?.fieldErrors) {
+                finalMessage = "Обнаружены следующие ошибки:\n\n";
+                for (const [field, errors] of Object.entries(errorJson.details.fieldErrors)) {
+                    finalMessage += `- **Поле \`${field}\`:** ${errors.join(', ')}\n`;
+                }
+            }
+        } catch (e) { /* Игнорируем, если это не JSON */ }
+
+        alertModalBody.innerHTML = `
+        <h2 class="${isError ? 'error' : 'success'}">${title}</h2>
+        <div>${window.marked ? window.marked.parse(finalMessage) : `<pre>${finalMessage}</pre>`}</div>
+    `;
+        openModal(alertModal);
+    };
+
+    function openSharedModal(promptData, isEditorMode) {
         if (!promptData) return;
 
-        // --- ИЗМЕНЕНИЕ: Добавляем/убираем класс в зависимости от режима ---
-        modal.classList.toggle('is-editor-mode', isEditorMode);
+        promptModal.classList.toggle('is-editor-mode', isEditorMode);
 
         const createPromptBlock = (title, contentObj) => {
             const rawContent = (contentObj.ru || contentObj.en || '');
             const htmlContent = window.marked ? window.marked.parse(rawContent) : rawContent;
-            // В режиме редактора textarea должна быть редактируемой
             const textareaIsReadonly = isEditorMode ? '' : 'readonly';
             return `
             <div class="prompt-view-block">
@@ -154,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ? `<div class="modal-footer"><button class="btn-save-modal">Сохранить изменения</button></div>`
             : (promptData.created_at ? `<div class="modal-footer"><button class="btn-edit" data-edit-id="${promptData.id}">Редактировать</button></div>` : '');
 
-        modalBody.innerHTML = `
+        promptModalBody.innerHTML = `
         <div class="modal-header">
             <h2>${promptData.title}</h2>
             ${!isEditorMode ? `<div class="modal-meta"><span><strong>Категория:</strong> ${promptData.category}</span><span><strong>Версия:</strong> ${promptData.version}</span><span><strong>ID:</strong> ${promptData.id || ''}</span></div>` : ''}
@@ -162,33 +215,50 @@ document.addEventListener('DOMContentLoaded', () => {
         ${createPromptBlock(isEditorMode ? 'Контент' : 'Базовый промпт', promptData.content)}
         ${variantsHtml}
         ${footerHtml}
-    `;
-        modal.classList.add('visible');
-        document.body.style.overflow = 'hidden';
+        `;
+        openModal(promptModal);
     }
+
     window.openModalWithPromptData = function (promptData) {
-        openModal(promptData, false);
+        openSharedModal(promptData, false);
     };
 
     window.openModalWithEditor = function (text, onSave) {
         const virtualPrompt = { title: "Редактор Markdown", content: { ru: text } };
         onModalSaveCallback = onSave;
-        openModal(virtualPrompt, true);
+        openSharedModal(virtualPrompt, true);
     };
 
-    function closeModal() {
-        onModalSaveCallback = null;
-        modal.classList.remove('visible');
-        modal.classList.remove('is-editor-mode');
-        document.body.style.overflow = '';
-    }
-
     function setupModalListeners() {
-        modal.addEventListener('click', async (e) => {
+        // Закрытие окна просмотра
+        promptModalCloseBtn.addEventListener('click', () => closeModal(promptModal));
+        promptModal.addEventListener('click', (e) => {
+            if (e.target === promptModal && !promptModal.classList.contains('is-editor-mode')) {
+                closeModal(promptModal);
+            }
+        });
+
+        // Закрытие окна уведомлений
+        alertModalCloseBtn.addEventListener('click', () => closeModal(alertModal));
+        alertModal.addEventListener('click', (e) => {
+            if (e.target === alertModal) {
+                closeModal(alertModal);
+            }
+        });
+
+        // Закрытие любого активного окна по Escape
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const visibleModal = document.querySelector('.modal-overlay.visible');
+                if (visibleModal) closeModal(visibleModal);
+            }
+        });
+
+        // Обработчики кнопок внутри окна ПРОСМОТРА (теперь это promptModal)
+        promptModal.addEventListener('click', async (e) => {
             const target = e.target;
             const promptBlock = target.closest('.prompt-view-block');
 
-            // --- Обработчик для переключателя Вид/Исходник ---
             if (target.matches('.toggle-btn')) {
                 if (target.classList.contains('active') || !promptBlock) return;
                 const viewType = target.dataset.view;
@@ -199,7 +269,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 wrapper.querySelector('.prompt-raw-view').classList.toggle('hidden', viewType !== 'raw');
             }
 
-            // --- Обработчик для кнопки "Копировать" ---
             if (target.matches('.btn-copy')) {
                 const rawView = promptBlock?.querySelector('.prompt-raw-view');
                 if (!rawView) return;
@@ -207,26 +276,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     await navigator.clipboard.writeText(rawView.value);
                     target.textContent = 'Скопировано!';
                     setTimeout(() => { target.textContent = 'Копировать'; }, 2000);
-                } catch (err) {
-                    console.error('Не удалось скопировать текст: ', err);
-                    target.textContent = 'Ошибка!';
-                }
+                } catch (err) { console.error('Не удалось скопировать текст: ', err); target.textContent = 'Ошибка!'; }
             }
 
-            // --- Обработчик для кнопки "Редактировать" ---
             if (target.matches('.btn-edit')) {
                 const promptId = target.dataset.editId;
                 const promptToEdit = allPrompts.find(p => p.id === promptId);
                 if (promptToEdit) {
-                    closeModal();
-                    // Вручную переключаем вид, БЕЗ СИМУЛЯЦИИ КЛИКА
+                    closeModal(promptModal);
+                    // Вручную переключаем вид
                     navLinks.forEach(l => l.classList.remove('active'));
                     const constructorLink = document.querySelector('.nav-link[data-view="constructor-view"]');
                     if (constructorLink) constructorLink.classList.add('active');
-
                     Object.values(views).forEach(v => v.classList.remove('active'));
                     views.constructor.classList.add('active');
-
                     // Пересоздаем конструктор с данными
                     if (window.initializeConstructor) {
                         window.initializeConstructor(views.constructor, allCategories, promptToEdit);
@@ -234,30 +297,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // --- Обработчик для кнопки "Сохранить изменения" (в режиме редактора) ---
             if (target.matches('.btn-save-modal')) {
-                const newText = modal.querySelector('.prompt-raw-view').value;
+                const newText = promptModal.querySelector('.prompt-raw-view').value;
                 if (typeof onModalSaveCallback === 'function') {
                     onModalSaveCallback(newText);
                 }
-                closeModal();
-            }
-        });
-
-        // --- Обработчики для закрытия модального окна ---
-        modalCloseBtn.addEventListener('click', closeModal);
-
-        modal.addEventListener('click', (e) => {
-            // Закрытие по клику на фон работает, только если это НЕ режим редактора
-            if (e.target === modal && !modal.classList.contains('is-editor-mode')) {
-                closeModal();
-            }
-        });
-
-        window.addEventListener('keydown', (e) => {
-            // Закрытие по Escape работает всегда
-            if (e.key === 'Escape' && modal.classList.contains('visible')) {
-                closeModal();
+                closeModal(promptModal);
             }
         });
     }
