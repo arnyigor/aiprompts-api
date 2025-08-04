@@ -152,44 +152,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let finalMessage = message;
 
+        // --- НОВАЯ, ПРЕДЕЛЬНО ПРОСТАЯ ЛОГИКА ---
         if (isError) {
             try {
-                const errorData = JSON.parse(message);
-
-                // Сценарий 1: Ошибка валидации от Zod
-                if (errorData.error === 'Validation failed' && errorData.details?.fieldErrors) {
-                    finalMessage = "Пожалуйста, исправьте следующие ошибки в форме:\n\n";
-                    for (const [field, errors] of Object.entries(errorData.details.fieldErrors)) {
-                        finalMessage += `- **Поле \`${field}\`:** ${errors.join(', ')}\n`;
-                    }
-                }
-                // Сценарий 2: Ошибка 500 с нашего сервера
-                else if (errorData.error === 'Internal Server Error.' && errorData.details) {
-                    // Пытаемся достать сообщение от GitHub API, если оно есть
-                    const githubMessage = errorData.details.responseData?.message;
-                    finalMessage = `Произошла внутренняя ошибка сервера.`;
-                    if (githubMessage) {
-                        finalMessage += `\n\n**Сообщение от GitHub:** \`${githubMessage}\``;
-                    } else {
-                        finalMessage += `\n\n**Технические детали:**\n\`\`\`json\n${JSON.stringify(errorData.details, null, 2)}\n\`\`\``;
-                    }
-                }
-                // Сценарий 3: Любой другой JSON
-                else {
-                    finalMessage = `**Получен ответ:**\n\n\`\`\`json\n${JSON.stringify(errorData, null, 2)}\n\`\`\``;
-                }
+                // Пытаемся распарсить как JSON, чтобы извлечь только основное сообщение
+                const errorJson = JSON.parse(message);
+                // Показываем ТОЛЬКО поле 'error', если оно есть. Иначе - всю строку.
+                finalMessage = errorJson.error || message;
             } catch (e) {
-                // Оставляем как есть, если это не JSON
+                // Если это не JSON, оставляем как есть
                 finalMessage = message;
             }
         }
 
         alertModalBody.innerHTML = `
         <h2 class="${isError ? 'error' : 'success'}">${title}</h2>
-        <div>${window.marked ? window.marked.parse(finalMessage) : `<pre>${finalMessage}</pre>`}</div>
+        <div>${window.marked ? window.marked.parse(finalMessage) : `<p>${finalMessage}</p>`}</div>
     `;
         openModal(alertModal);
     };
+
     function openSharedModal(promptData, isEditorMode) {
         if (!promptData) return;
         promptModal.classList.toggle('is-editor-mode', isEditorMode);

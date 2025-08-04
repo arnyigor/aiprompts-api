@@ -40,29 +40,29 @@ const constructorHtmlTemplate = `
             <button type="submit" id="submit-btn" class="btn-submit"><span class="button-text"></span><div class="spinner"></div></button>
         </div>
         <div class="preview-container"><h2>Предпросмотр JSON</h2><pre id="json-preview-constructor" class="preview-area json-preview"></pre></div>
-        <div class="preview-container"><h2>Ответ Сервера</h2><pre id="response-area-constructor" class="preview-area" aria-live="polite"></pre></div>
     </form>
 `;
 
-// promptToEdit - необязательный параметр для режима редактирования
 window.initializeConstructor = function (container, categories = [], promptToEdit = null) {
     if (!container) return;
     container.innerHTML = constructorHtmlTemplate;
 
+    // --- ВСЕ ПЕРЕМЕННЫЕ И ФУНКЦИИ ТЕПЕРЬ ВНУТРИ ОДНОЙ ОБЛАСТИ ВИДИМОСТИ ---
     const form = container.querySelector('#prompt-form');
     const jsonPreview = container.querySelector('#json-preview-constructor');
+    const categorySelect = container.querySelector('#category-constructor');
     let currentId = promptToEdit ? promptToEdit.id : '';
     const isEditing = promptToEdit !== null;
 
-    container.querySelector('#constructor-title').textContent = isEditing ? "Редактирование промпта" : "Создание нового промпта";
-    container.querySelector('#submit-btn .button-text').textContent = isEditing ? "Отправить изменения" : "Создать Pull Request";
+    form.querySelector('#constructor-title').textContent = isEditing ? "Редактирование промпта" : "Создание нового промпта";
+    form.querySelector('#submit-btn .button-text').textContent = isEditing ? "Отправить изменения" : "Создать Pull Request";
 
     const itemTemplates = {
         simple: (value = '') => `<input type="text" value="${value}" /><button type="button" class="btn-remove">×</button>`,
         variable: (name = '', desc = '', def = '') => `<div class="form-grid" style="width: 100%"><input type="text" placeholder="Имя" data-key="name" value="${name}"/><input type="text" placeholder="Описание" data-key="description" value="${desc}"/><input type="text" placeholder="Значение" data-key="default_value" value="${def}"/></div><button type="button" class="btn-remove">×</button>`,
         variant: () => `<div class="variant-header"><h4>Специфичный вариант</h4><button type="button" class="btn-remove">×</button></div><div class="form-grid"><div class="form-group"><label>Тип</label><input type="text" placeholder="e.g., model" data-key="type" /></div><div class="form-group"><label>ID</label><input type="text" placeholder="e.g., gpt-4" data-key="id" /></div><div class="form-group"><label>Приоритет</label><input type="number" placeholder="e.g., 1" data-key="priority" /></div></div><div class="form-group form-group-editor"><label>Контент (RU)</label><textarea data-key="content_ru"></textarea><button type="button" class="btn-editor-preview" data-editor-target-dynamic="content_ru">👁️</button></div><div class="form-group form-group-editor"><label>Контент (EN)</label><textarea data-key="content_en"></textarea><button type="button" class="btn-editor-preview" data-editor-target-dynamic="content_en">👁️</button></div>`
     };
-
+    
     function addItem(listContainer, templateHtml) {
         const item = document.createElement('div');
         item.className = templateHtml.includes('variant-header') ? 'variant-item' : 'dynamic-item';
@@ -73,14 +73,10 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
             updateJsonPreview();
         });
         updateJsonPreview();
+        return item; // Возвращаем для заполнения
     }
 
-    function gatherPayload(generateNewId = false) {
-        const isEditing = !!form.querySelector('#original-category').value;
-
-        if (generateNewId && !currentId) {
-            currentId = (() => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }))();
-        }
+    function gatherPayload() {
         const formData = new FormData(form);
         const originalCategory = form.querySelector('#original-category').value;
         return {
@@ -119,10 +115,6 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
     }
 
     function populateCategories(categoriesToPopulate) {
-        const categorySelect = container.querySelector('#category-constructor');
-        if (!categorySelect) return;
-        const currentValue = categorySelect.value; // Сохраняем текущее значение, если оно есть
-
         if (categoriesToPopulate && categoriesToPopulate.length > 0) {
             categorySelect.innerHTML = '<option value="">Выберите категорию...</option>';
             categoriesToPopulate.forEach(category => {
@@ -131,18 +123,15 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
                 option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
                 categorySelect.appendChild(option);
             });
-            // Пытаемся восстановить значение
-            if (categoriesToPopulate.includes(currentValue)) {
-                categorySelect.value = currentValue;
-            }
         } else {
             categorySelect.innerHTML = '<option value="">Загрузка...</option>';
         }
     }
+    
+    // --- ЗАПОЛНЕНИЕ ДАННЫМИ И ПРИВЯЗКА СОБЫТИЙ ---
 
-    window.updateConstructorCategories = function (newCategories) {
-        populateCategories(newCategories);
-    };
+    // Сначала заполняем категории
+    populateCategories(categories);
 
     if (isEditing) {
         form.querySelector('#title').value = promptToEdit.title || '';
@@ -150,42 +139,27 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
         form.querySelector('#description').value = promptToEdit.description || '';
         form.querySelector('#content_ru').value = promptToEdit.content?.ru || '';
         form.querySelector('#content_en').value = promptToEdit.content?.en || '';
-        populateCategories(categories);
-        form.querySelector('#category-constructor').value = promptToEdit.category || '';
+        categorySelect.value = promptToEdit.category || '';
         form.querySelector('#original-category').value = promptToEdit.category || '';
+        
         (promptToEdit.tags || []).forEach(tag => addItem(container.querySelector('#tags-list'), itemTemplates.simple(tag)));
         (promptToEdit.compatible_models || []).forEach(model => addItem(container.querySelector('#models-list'), itemTemplates.simple(model)));
         (promptToEdit.variables || []).forEach(v => addItem(container.querySelector('#variables-list'), itemTemplates.variable(v.name, v.description, v.default_value)));
+        
         (promptToEdit.prompt_variants || []).forEach(variant => {
-            const itemHtml = itemTemplates.variant();
-            // Создаем временный элемент, чтобы заполнить его данными
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = itemHtml;
-            
-            // Заполняем поля внутри этого временного элемента
-            tempDiv.querySelector('[data-key="type"]').value = variant.variant_id.type;
-            tempDiv.querySelector('[data-key="id"]').value = variant.variant_id.id;
-            tempDiv.querySelector('[data-key="priority"]').value = variant.variant_id.priority || '';
-            tempDiv.querySelector('[data-key="content_ru"]').value = variant.content.ru || '';
-            tempDiv.querySelector('[data-key="content_en"]').value = variant.content.en || '';
-
-            // Добавляем в DOM уже заполненный HTML
-            addItem(container.querySelector('#variants-list'), tempDiv.innerHTML);
+            const newItem = addItem(container.querySelector('#variants-list'), itemTemplates.variant());
+            newItem.querySelector('[data-key="type"]').value = variant.variant_id.type;
+            newItem.querySelector('[data-key="id"]').value = variant.variant_id.id;
+            newItem.querySelector('[data-key="priority"]').value = variant.variant_id.priority || '';
+            newItem.querySelector('[data-key="content_ru"]').value = variant.content.ru || '';
+            newItem.querySelector('[data-key="content_en"]').value = variant.content.en || '';
         });
-    } else {
-        populateCategories(categories);
     }
 
+    // Привязываем все обработчики
     form.addEventListener('click', (e) => {
         if (e.target.matches('.btn-editor-preview')) {
-            const targetId = e.target.dataset.editorTarget;
-            let targetTextarea;
-            if (targetId) {
-                targetTextarea = form.querySelector(`#${targetId}`);
-            } else {
-                const dynamicTargetKey = e.target.dataset.editorTargetDynamic;
-                targetTextarea = e.target.closest('.form-group-editor').querySelector(`[data-key="${dynamicTargetKey}"]`);
-            }
+            const targetTextarea = e.target.closest('.form-group-editor').querySelector('textarea');
             if (targetTextarea && window.openModalWithEditor) {
                 window.openModalWithEditor(targetTextarea.value, (newText) => {
                     targetTextarea.value = newText;
@@ -206,47 +180,48 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
 
     form.addEventListener('input', updateJsonPreview);
 
-
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
-        if (!validateForm()) {
-            alert('Пожалуйста, заполните все обязательные поля.');
-            return;
-        }
+        if (!validateForm()) { alert('Пожалуйста, заполните все обязательные поля.'); return; }
+        
         const submitBtn = form.querySelector('#submit-btn');
         submitBtn.disabled = true;
         submitBtn.classList.add('loading');
+        
+        // Генерируем новый ID только если мы НЕ в режиме редактирования
+        if (!isEditing) {
+            currentId = (() => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }))();
+        }
+        
+        const payload = gatherPayload();
+        
+        const now = new Date().toISOString();
+        payload.updated_at = now;
+        if (!isEditing) {
+            payload.created_at = now;
+        } else {
+             const originalPrompt = window.allPrompts.find(p => p.id === currentId);
+             payload.created_at = originalPrompt?.created_at || now; // Защита от случая, если промпт не найден
+        }
 
-        const payload = gatherPayload(true);
         try {
             const response = await fetch(CONSTRUCTOR_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const responseData = await response.json();
-
             if (!response.ok) {
-                // --- ИСПРАВЛЕНИЕ ---
-                // Теперь мы передаем в showAlert СЫРОЙ JSON, а не отформатированную строку
-                if (window.showAlert) {
-                    // Добавляем статус в объект для контекста
-                    const errorPayload = { ...responseData, status: response.status };
-                    window.showAlert(
-                        `❌ Ошибка отправки`,
-                        JSON.stringify(errorPayload), // Передаем сырой JSON
-                        true
-                    );
-                }
+                const errorPayload = { ...responseData, status: response.status };
+                if (window.showAlert) window.showAlert(`❌ Ошибка отправки`, JSON.stringify(errorPayload), true);
                 throw new Error('Server returned an error');
             }
-
             const successMessage = `**Pull Request успешно создан!**\n\nВы можете посмотреть его по ссылке:\n[${responseData.pullRequestUrl}](${responseData.pullRequestUrl})`;
             if (window.showAlert) window.showAlert('✅ Успех!', successMessage, false);
-
+            
             if (window.initializeConstructor) {
                 window.initializeConstructor(container, categories);
             }
         } catch (error) {
             console.error("Ошибка при отправке формы:", error);
             if (!error.message.includes('Server returned an error')) {
-                if (window.showAlert) window.showAlert('❌ Критическая ошибка', `Произошла непредвиденная ошибка. Подробности в консоли.`, true);
+                 if (window.showAlert) window.showAlert('❌ Критическая ошибка', `Произошла непредвиденная ошибка. Подробности в консоли.`, true);
             }
         } finally {
             submitBtn.disabled = false;
