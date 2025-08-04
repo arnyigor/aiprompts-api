@@ -23,9 +23,11 @@ const PromptSchema = z.object({
     rating: z.any(),
 }).passthrough();
 
-function formatPullRequestBody(data, filePath, oldFilePath = null) {
+function formatPullRequestBody(data, filePath, categoryChanged, oldCategory = null) {
+    const oldFilePath = categoryChanged ? `prompts/${oldCategory}/${data.id}.json` : null;
+
     let body = `### 📥 Предложение: ${data.title}\n\n`;
-    if (oldFilePath) {
+    if (categoryChanged && oldFilePath) {
         body += `**Перемещение файла:**\n- ~~${oldFilePath}~~\n- → \`${filePath}\`\n\n`;
     } else {
         body += `**Файл:** \`${filePath}\`\n`;
@@ -73,39 +75,20 @@ export default async function handler(req, res) {
         const categoryChanged = isEditing && newCategory !== oldCategory;
 
         const newFilePath = `prompts/${newCategory}/${incomingData.id}.json`;
-        const oldFilePath = isEditing ? `prompts/${oldCategory}/${incomingData.id}.json` : null;
-
-        let finalData = { ...incomingData };
-
-        // 1. Получаем ссылку на последний коммит в основной ветке
-        const mainBranchRef = await octokit.rest.git.getRef({ owner, repo, ref: `heads/${mainBranch}` });
-        const lastCommitSha = mainBranchRef.data.object.sha;
-
-        // 2. Получаем дерево файлов этого коммита рекурсивно
-        const { data: baseTree } = await octokit.rest.git.getTree({ owner, repo, tree_sha: lastCommitSha, recursive: true });
+        const oldFilePathForDelete = isEditing ? `prompts/${oldCategory}/${incomingData.id}.json` : null;
         
-        // 3. Формируем новое дерево на основе старого
-        let newTree = baseTree.tree.map(item => ({
-            path: item.path,
-            mode: item.mode,
-            type: item.type,
-            sha: item.sha,
-        }));
+        let finalData = { ...incomingData };
+        let fileSha = undefined;
 
-        // Обработка дат и удаление старого файла из дерева
         if (isEditing) {
-            const pathToRead = oldFilePath || newFilePath;
             try {
-                const { data: existingFile } = await octokit.rest.repos.getContent({ owner, repo, path: pathToRead, ref: mainBranch });
+                const { data: existingFile } = await octokit.rest.repos.getContent({ owner, repo, path: oldFilePathForDelete, ref: mainBranch });
+                fileSha = existingFile.sha;
                 const oldContent = JSON.parse(Buffer.from(existingFile.content, 'base64').toString('utf-8'));
                 finalData.created_at = oldContent.created_at || getTimestampWithoutZ(new Date());
-            } catch (e) {
-                // Если файла не было, это первая редакция, устанавливаем дату
+            } catch (error) {
+                if (error.status !== 404) throw error;
                 finalData.created_at = getTimestampWithoutZ(new Date());
-            }
-            if (categoryChanged) {
-                // Удаляем старый файл из списка для нового дерева
-                newTree = newTree.filter(item => item.path !== oldFilePath);
             }
         } else {
             finalData.created_at = getTimestampWithoutZ(new Date());
@@ -114,7 +97,19 @@ export default async function handler(req, res) {
         finalData.updated_at = getTimestampWithoutZ(new Date());
         delete finalData.original_category;
 
-        // Добавляем новый/обновленный файл в дерево
+        const prTitle = isEditing ? `Обновление промпта: ${finalData.title}` : `Новый промпт: ${finalData.title}`;
+        const timestamp = Date.now().toString().slice(-6);
+        const newBranchName = `prompts/${isEditing ? 'update' : 'add'}-${finalData.id.substring(0, 8)}-${timestamp}`;
+        const mainBranchRef = await octokit.rest.git.getRef({ owner, repo, ref: `heads/${mainBranch}` });
+        const lastCommitSha = mainBranchRef.data.object.sha;
+
+        const { data: baseTree } = await octokit.rest.git.getTree({ owner, repo, tree_sha: lastCommitSha, recursive: true });
+        let newTree = baseTree.tree.map(item => ({ path: item.path, mode: item.mode, type: item.type, sha: item.sha }));
+        
+        if (categoryChanged) {
+            newTree = newTree.filter(item => item.path !== oldFilePathForDelete);
+        }
+
         newTree.push({
             path: newFilePath,
             mode: '100644',
@@ -122,10 +117,7 @@ export default async function handler(req, res) {
             content: JSON.stringify(finalData, null, 2),
         });
 
-        // 4. Создаем новое дерево на сервере GitHub
         const { data: createdTree } = await octokit.rest.git.createTree({ owner, repo, tree: newTree });
-
-        // 5. Создаем новый коммит, который указывает на это новое дерево
         const commitMessage = isEditing ? `fix: update prompt "${finalData.title}"` : `feat: add prompt "${finalData.title}"`;
         const { data: newCommit } = await octokit.rest.git.createCommit({
             owner, repo,
@@ -134,17 +126,11 @@ export default async function handler(req, res) {
             parents: [lastCommitSha],
             author: committer,
         });
-
-        // 6. Создаем новую ветку, указывающую на этот новый коммит
-        const prTitle = isEditing ? `Обновление промпта: ${finalData.title}` : `Новый промпт: ${finalData.title}`;
-        const timestamp = Date.now().toString().slice(-6);
-        const newBranchName = `prompts/${isEditing ? 'update' : 'add'}-${finalData.id.substring(0, 8)}-${timestamp}`;
         await octokit.rest.git.createRef({ owner, repo, ref: `refs/heads/${newBranchName}`, sha: newCommit.sha });
-
-        // 7. Создаем Pull Request
-        const prBody = formatPullRequestBody(finalData, newFilePath, oldFilePath);
+        
+        const prBody = formatPullRequestBody(finalData, newFilePath, categoryChanged, oldCategory);
         const pr = await octokit.rest.pulls.create({ owner, repo, title: prTitle, head: newBranchName, base: mainBranch, body: prBody });
-
+        
         res.status(201).json({ message: 'Pull Request created/updated successfully.', pullRequestUrl: pr.data.html_url });
 
     } catch (error) {

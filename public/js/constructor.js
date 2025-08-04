@@ -51,7 +51,6 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
 
     const form = container.querySelector('#prompt-form');
     const jsonPreview = container.querySelector('#json-preview-constructor');
-    const responseArea = container.querySelector('#response-area-constructor');
     let currentId = promptToEdit ? promptToEdit.id : '';
     const isEditing = promptToEdit !== null;
 
@@ -159,13 +158,18 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
         (promptToEdit.variables || []).forEach(v => addItem(container.querySelector('#variables-list'), itemTemplates.variable(v.name, v.description, v.default_value)));
         (promptToEdit.prompt_variants || []).forEach(variant => {
             const itemHtml = itemTemplates.variant();
+            // Создаем временный элемент, чтобы заполнить его данными
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = itemHtml;
+            
+            // Заполняем поля внутри этого временного элемента
             tempDiv.querySelector('[data-key="type"]').value = variant.variant_id.type;
             tempDiv.querySelector('[data-key="id"]').value = variant.variant_id.id;
             tempDiv.querySelector('[data-key="priority"]').value = variant.variant_id.priority || '';
             tempDiv.querySelector('[data-key="content_ru"]').value = variant.content.ru || '';
             tempDiv.querySelector('[data-key="content_en"]').value = variant.content.en || '';
+
+            // Добавляем в DOM уже заполненный HTML
             addItem(container.querySelector('#variants-list'), tempDiv.innerHTML);
         });
     } else {
