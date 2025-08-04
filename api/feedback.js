@@ -1,5 +1,32 @@
 // Используем встроенный fetch, доступный в современных средах Node.js на Vercel
 export default async function handler(req, res) {
+  // --- БЛОК БЕЗОПАСНОСТИ ---
+  // --- НАСТРОЙКА CORS ---
+  const allowedOrigin = 'https://aipromptsapi.vercel.app';
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Обработка preflight-запроса
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // --- ПРОВЕРКА API-КЛЮЧА ---
+  // Если запрос идет НЕ из браузера, он должен иметь ключ
+  const clientApiKey = req.headers['x-api-key'];
+  const origin = req.headers['origin'];
+
+  // Разрешаем запросы, только если:
+  // 1. Они приходят с нашего же сайта (проверка Origin)
+  // ИЛИ
+  // 2. Они содержат правильный API-ключ (проверка X-API-Key)
+  if (origin !== allowedOrigin && clientApiKey !== process.env.API_SECRET_KEY) {
+    // Если ни одно из условий не выполнено - отклоняем запрос.
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  // --- КОНЕЦ БЛОКА БЕЗОПАСНОСТИ ---
+
   // 1. Проверяем, что это POST-запрос
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -20,8 +47,8 @@ export default async function handler(req, res) {
     const chatId = process.env.TELEGRAM_CHAT_ID;
 
     if (!botToken || !chatId) {
-        console.error('Telegram secrets are not configured!');
-        return res.status(500).json({ error: 'Server configuration error.' });
+      console.error('Telegram secrets are not configured!');
+      return res.status(500).json({ error: 'Server configuration error.' });
     }
 
     // 4. Формируем сообщение для Telegram

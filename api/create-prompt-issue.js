@@ -56,13 +56,40 @@ function formatPullRequestBody(data, filePath, categoryChanged, oldCategory = nu
 function getTimestampWithoutZ(date) { return date.toISOString().slice(0, -1); }
 
 export default async function handler(req, res) {
+    // --- БЛОК БЕЗОПАСНОСТИ ---
+    // --- НАСТРОЙКА CORS ---
+    const allowedOrigin = 'https://aipromptsapi.vercel.app';
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Обработка preflight-запроса
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    // --- ПРОВЕРКА API-КЛЮЧА ---
+    // Если запрос идет НЕ из браузера, он должен иметь ключ
+    const clientApiKey = req.headers['x-api-key'];
+    const origin = req.headers['origin'];
+
+    // Разрешаем запросы, только если:
+    // 1. Они приходят с нашего же сайта (проверка Origin)
+    // ИЛИ
+    // 2. Они содержат правильный API-ключ (проверка X-API-Key)
+    if (origin !== allowedOrigin && clientApiKey !== process.env.API_SECRET_KEY) {
+        // Если ни одно из условий не выполнено - отклоняем запрос.
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    // --- КОНЕЦ БЛОКА БЕЗОПАСНОСТИ ---
+
     if (req.method !== 'POST') { return res.status(405).end('Method Not Allowed'); }
     try {
         const validationResult = PromptSchema.safeParse(req.body);
         if (!validationResult.success) {
             return res.status(400).json({ error: 'Validation failed', details: validationResult.error.flatten() });
         }
-        
+
         const incomingData = validationResult.data;
         const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
         const owner = process.env.GITHUB_REPO_OWNER;
@@ -76,7 +103,7 @@ export default async function handler(req, res) {
 
         const newFilePath = `prompts/${newCategory}/${incomingData.id}.json`;
         const oldFilePathForDelete = isEditing ? `prompts/${oldCategory}/${incomingData.id}.json` : null;
-        
+
         let finalData = { ...incomingData };
         let fileSha = undefined;
 
@@ -93,7 +120,7 @@ export default async function handler(req, res) {
         } else {
             finalData.created_at = getTimestampWithoutZ(new Date());
         }
-        
+
         finalData.updated_at = getTimestampWithoutZ(new Date());
         delete finalData.original_category;
 
@@ -105,7 +132,7 @@ export default async function handler(req, res) {
 
         const { data: baseTree } = await octokit.rest.git.getTree({ owner, repo, tree_sha: lastCommitSha, recursive: true });
         let newTree = baseTree.tree.map(item => ({ path: item.path, mode: item.mode, type: item.type, sha: item.sha }));
-        
+
         if (categoryChanged) {
             newTree = newTree.filter(item => item.path !== oldFilePathForDelete);
         }
@@ -127,10 +154,10 @@ export default async function handler(req, res) {
             author: committer,
         });
         await octokit.rest.git.createRef({ owner, repo, ref: `refs/heads/${newBranchName}`, sha: newCommit.sha });
-        
+
         const prBody = formatPullRequestBody(finalData, newFilePath, categoryChanged, oldCategory);
         const pr = await octokit.rest.pulls.create({ owner, repo, title: prTitle, head: newBranchName, base: mainBranch, body: prBody });
-        
+
         res.status(201).json({ message: 'Pull Request created/updated successfully.', pullRequestUrl: pr.data.html_url });
 
     } catch (error) {

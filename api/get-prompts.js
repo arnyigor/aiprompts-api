@@ -17,14 +17,45 @@ export const config = {
 
 // Функция для получения содержимого файла по URL
 async function getFileContent(download_url) {
-    const response = await fetch(download_url);
-    return response.json();
+  const response = await fetch(download_url);
+  return response.json();
 }
 
 export default async function handler(req, res) {
+ // --- БЛОК БЕЗОПАСНОСТИ ---
+    // --- НАСТРОЙКА CORS ---
+    const allowedOrigin = 'https://aipromptsapi.vercel.app';
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Обработка preflight-запроса
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    // --- ПРОВЕРКА API-КЛЮЧА ---
+    // Если запрос идет НЕ из браузера, он должен иметь ключ
+    const clientApiKey = req.headers['x-api-key'];
+    const origin = req.headers['origin'];
+
+    // Разрешаем запросы, только если:
+    // 1. Они приходят с нашего же сайта (проверка Origin)
+    // ИЛИ
+    // 2. Они содержат правильный API-ключ (проверка X-API-Key)
+    if (origin !== allowedOrigin && clientApiKey !== process.env.API_SECRET_KEY) {
+        // Если ни одно из условий не выполнено - отклоняем запрос.
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    // --- КОНЕЦ БЛОКА БЕЗОПАСНОСТИ ---
+
   // Устанавливаем заголовки для кеширования.
-  // Кешировать на 10 минут (600 секунд), но проверять наличие новой версии каждые 60 секунд.
-  res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=60');
+  // s-maxage=86400: Кешировать результат на Edge-сети Vercel на 24 часа (86400 секунд).
+  // stale-while-revalidate=600: Если пользователь зайдет после истечения 24 часов,
+  // Vercel отдаст ему старые (stale) данные, но в фоне запустит функцию,
+  // чтобы обновить кеш на следующие 24 часа. 
+  // Следующий пользователь уже получит свежие данные.
+  res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=600');
 
   try {
     // 1. Получаем список категорий (директорий)
@@ -43,7 +74,7 @@ export default async function handler(req, res) {
       const fileContentPromises = files
         .filter(file => file.type === 'file' && file.name.endsWith('.json'))
         .map(file => getFileContent(file.download_url));
-      
+
       return Promise.all(fileContentPromises);
     });
 
