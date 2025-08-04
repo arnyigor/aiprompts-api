@@ -77,10 +77,13 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
     }
 
     function gatherPayload(generateNewId = false) {
+        const isEditing = !!form.querySelector('#original-category').value;
+
         if (generateNewId && !currentId) {
             currentId = (() => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }))();
         }
         const formData = new FormData(form);
+        const originalCategory = form.querySelector('#original-category').value;
         return {
             id: currentId,
             title: formData.get('title'),
@@ -98,6 +101,7 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
             variables: Array.from(container.querySelectorAll('#variables-list .dynamic-item')).map(item => ({ name: item.querySelector('[data-key="name"]').value, description: item.querySelector('[data-key="description"]').value, default_value: item.querySelector('[data-key="default_value"]').value })).filter(v => v.name),
             metadata: { author: { id: "", name: "WebApp Contributor" }, source: "WebApp", notes: "" },
             rating: { score: 0.0, votes: 0 },
+            original_category: isEditing ? originalCategory : undefined
         };
     }
 
