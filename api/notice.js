@@ -1,28 +1,36 @@
 // api/notice.js
 export default async function handler(req, res) {
-  // --- БЛОК БЕЗОПАСНОСТИ ---
-  // --- НАСТРОЙКА CORS ---
-  const allowedOrigin = 'https://aipromptsapi.vercel.app';
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // --- БЛОК БЕЗОПАСНОСТИ (УЛУЧШЕННЫЙ) ---
 
-  // Обработка preflight-запроса
+  const VERCEL_URL = process.env.VERCEL_URL || 'localhost:3000';
+  const ALLOWED_ORIGINS = [
+    `https://${VERCEL_URL}`,
+    `https://www.aipromptsapi.vercel.app` // Добавим www-версию явно
+  ];
+  // Для локальной разработки добавляем localhost
+  if (process.env.NODE_ENV === 'development') {
+    ALLOWED_ORIGINS.push('http://localhost:3000');
+  }
+
+  const origin = req.headers['origin'];
+  const clientApiKey = req.headers['x-api-key'];
+
+  // Устанавливаем CORS заголовок, только если origin разрешен
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // --- ПРОВЕРКА API-КЛЮЧА ---
-  // Если запрос идет НЕ из браузера, он должен иметь ключ
-  const clientApiKey = req.headers['x-api-key'];
-  const origin = req.headers['origin'];
-
-  // Разрешаем запросы, только если:
-  // 1. Они приходят с нашего же сайта (проверка Origin)
-  // ИЛИ
-  // 2. Они содержат правильный API-ключ (проверка X-API-Key)
-  if (origin !== allowedOrigin && clientApiKey !== process.env.API_SECRET_KEY) {
-    // Если ни одно из условий не выполнено - отклоняем запрос.
+  // Проверка доступа
+  if (!ALLOWED_ORIGINS.includes(origin) && clientApiKey !== process.env.API_SECRET_KEY) {
+    // Добавим логирование, чтобы видеть, какой origin был отклонен
+    console.warn(`Unauthorized access attempt from origin: ${origin}`);
     return res.status(401).json({ error: 'Unauthorized' });
   }
   // --- КОНЕЦ БЛОКА БЕЗОПАСНОСТИ ---

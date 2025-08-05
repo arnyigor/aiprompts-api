@@ -22,32 +22,39 @@ async function getFileContent(download_url) {
 }
 
 export default async function handler(req, res) {
- // --- БЛОК БЕЗОПАСНОСТИ ---
-    // --- НАСТРОЙКА CORS ---
-    const allowedOrigin = 'https://aipromptsapi.vercel.app';
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // --- БЛОК БЕЗОПАСНОСТИ (ФИНАЛЬНАЯ ВЕРСИЯ) ---
 
-    // Обработка preflight-запроса
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+  const allowedOrigins = [
+    'https://aipromptsapi.vercel.app',   // Явно указываем прод
+    'https://www.aipromptsapi.vercel.app' // И www-версию
+  ];
 
-    // --- ПРОВЕРКА API-КЛЮЧА ---
-    // Если запрос идет НЕ из браузера, он должен иметь ключ
-    const clientApiKey = req.headers['x-api-key'];
-    const origin = req.headers['origin'];
+  // Используем системную переменную VERCEL_ENV, которую vercel dev устанавливает в 'development'
+  if (process.env.VERCEL_ENV === 'development') {
+    allowedOrigins.push('http://localhost:3000');
+  }
 
-    // Разрешаем запросы, только если:
-    // 1. Они приходят с нашего же сайта (проверка Origin)
-    // ИЛИ
-    // 2. Они содержат правильный API-ключ (проверка X-API-Key)
-    if (origin !== allowedOrigin && clientApiKey !== process.env.API_SECRET_KEY) {
-        // Если ни одно из условий не выполнено - отклоняем запрос.
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    // --- КОНЕЦ БЛОКА БЕЗОПАСНОСТИ ---
+  const origin = req.headers['origin'];
+  const clientApiKey = req.headers['x-api-key'];
+
+  // Устанавливаем CORS заголовок, только если origin разрешен
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // Проверка доступа
+  if (!allowedOrigins.includes(origin) && clientApiKey !== process.env.API_SECRET_KEY) {
+    console.warn(`[SECURITY] Unauthorized access attempt from origin: ${origin}. VERCEL_ENV: ${process.env.VERCEL_ENV}`);
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  // --- КОНЕЦ БЛОКА БЕЗОПАСНОСТИ ---
 
   // Устанавливаем заголовки для кеширования.
   // s-maxage=86400: Кешировать результат на Edge-сети Vercel на 24 часа (86400 секунд).
