@@ -58,12 +58,7 @@ export default async function handler(req, res) {
   // --- КОНЕЦ БЛОКА БЕЗОПАСНОСТИ ---
 
   // Устанавливаем заголовки для кеширования.
-  // s-maxage=86400: Кешировать результат на Edge-сети Vercel на 24 часа (86400 секунд).
-  // stale-while-revalidate=600: Если пользователь зайдет после истечения 24 часов,
-  // Vercel отдаст ему старые (stale) данные, но в фоне запустит функцию,
-  // чтобы обновить кеш на следующие 24 часа. 
-  // Следующий пользователь уже получит свежие данные.
-  res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=600');
+  res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=3600');
 
   try {
     // 1. Получаем список категорий (директорий)
