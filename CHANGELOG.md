@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.2.0](https://github.com/arnyigor/aipromptsapi/compare/v1.1.0...v1.2.0) (2025-08-06)
+
+
+### Features
+
+* **api:** Implement security and caching improvements ([fdff036](https://github.com/arnyigor/aipromptsapi/commit/fdff036459c61a2a50531776302704a7e3877898))
+* **app:** Implement API security and feature flags ([ddb6c0f](https://github.com/arnyigor/aipromptsapi/commit/ddb6c0f2fc50c1e57b5af471b1435a9473f97470))
+
 ## 1.1.0 (2025-08-04)
 
 
