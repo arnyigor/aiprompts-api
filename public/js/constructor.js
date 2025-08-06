@@ -1,4 +1,6 @@
 const CONSTRUCTOR_API_URL = '/api/create-prompt-issue';
+// --- ВОЗВРАЩАЕМ КЛЮЧ ПРЯМО В КОД ---
+const PUBLIC_API_KEY = "a51a108d-d674-456f-af3b-2a5e849827c0"; 
 
 const constructorHtmlTemplate = `
     <form id="prompt-form" novalidate>
@@ -62,7 +64,7 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
         variable: (name = '', desc = '', def = '') => `<div class="form-grid" style="width: 100%"><input type="text" placeholder="Имя" data-key="name" value="${name}"/><input type="text" placeholder="Описание" data-key="description" value="${desc}"/><input type="text" placeholder="Значение" data-key="default_value" value="${def}"/></div><button type="button" class="btn-remove">×</button>`,
         variant: () => `<div class="variant-header"><h4>Специфичный вариант</h4><button type="button" class="btn-remove">×</button></div><div class="form-grid"><div class="form-group"><label>Тип</label><input type="text" placeholder="e.g., model" data-key="type" /></div><div class="form-group"><label>ID</label><input type="text" placeholder="e.g., gpt-4" data-key="id" /></div><div class="form-group"><label>Приоритет</label><input type="number" placeholder="e.g., 1" data-key="priority" /></div></div><div class="form-group form-group-editor"><label>Контент (RU)</label><textarea data-key="content_ru"></textarea><button type="button" class="btn-editor-preview" data-editor-target-dynamic="content_ru">👁️</button></div><div class="form-group form-group-editor"><label>Контент (EN)</label><textarea data-key="content_en"></textarea><button type="button" class="btn-editor-preview" data-editor-target-dynamic="content_en">👁️</button></div>`
     };
-    
+
     function addItem(listContainer, templateHtml) {
         const item = document.createElement('div');
         item.className = templateHtml.includes('variant-header') ? 'variant-item' : 'dynamic-item';
@@ -127,7 +129,7 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
             categorySelect.innerHTML = '<option value="">Загрузка...</option>';
         }
     }
-    
+
     // --- ЗАПОЛНЕНИЕ ДАННЫМИ И ПРИВЯЗКА СОБЫТИЙ ---
 
     // Сначала заполняем категории
@@ -141,11 +143,11 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
         form.querySelector('#content_en').value = promptToEdit.content?.en || '';
         categorySelect.value = promptToEdit.category || '';
         form.querySelector('#original-category').value = promptToEdit.category || '';
-        
+
         (promptToEdit.tags || []).forEach(tag => addItem(container.querySelector('#tags-list'), itemTemplates.simple(tag)));
         (promptToEdit.compatible_models || []).forEach(model => addItem(container.querySelector('#models-list'), itemTemplates.simple(model)));
         (promptToEdit.variables || []).forEach(v => addItem(container.querySelector('#variables-list'), itemTemplates.variable(v.name, v.description, v.default_value)));
-        
+
         (promptToEdit.prompt_variants || []).forEach(variant => {
             const newItem = addItem(container.querySelector('#variants-list'), itemTemplates.variant());
             newItem.querySelector('[data-key="type"]').value = variant.variant_id.type;
@@ -183,7 +185,7 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!validateForm()) { alert('Пожалуйста, заполните все обязательные поля.'); return; }
-        
+
         const submitBtn = form.querySelector('#submit-btn');
         submitBtn.disabled = true;
         submitBtn.classList.add('loading');
@@ -192,20 +194,31 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
         if (!isEditing) {
             currentId = (() => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }))();
         }
-        
+
         const payload = gatherPayload();
-        
+
         const now = new Date().toISOString();
         payload.updated_at = now;
         if (!isEditing) {
             payload.created_at = now;
         } else {
-             const originalPrompt = window.allPrompts.find(p => p.id === currentId);
-             payload.created_at = originalPrompt?.created_at || now; // Защита от случая, если промпт не найден
+            const originalPrompt = window.allPrompts.find(p => p.id === currentId);
+            payload.created_at = originalPrompt?.created_at || now; // Защита от случая, если промпт не найден
         }
 
         try {
-            const response = await fetch(CONSTRUCTOR_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (window.CONFIG && window.CONFIG.publicKey) {
+                headers['X-Public-Key'] = window.CONFIG.publicKey;
+            }
+
+            const response = await fetch(CONSTRUCTOR_API_URL, {
+                method: 'POST',
+                headers: headers, // Передаем объект заголовков
+                body: JSON.stringify(payload)
+            });
             const responseData = await response.json();
             if (!response.ok) {
                 const errorPayload = { ...responseData, status: response.status };
@@ -214,14 +227,14 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
             }
             const successMessage = `**Pull Request успешно создан!**\n\nВы можете посмотреть его по ссылке:\n[${responseData.pullRequestUrl}](${responseData.pullRequestUrl})`;
             if (window.showAlert) window.showAlert('✅ Успех!', successMessage, false);
-            
+
             if (window.initializeConstructor) {
                 window.initializeConstructor(container, categories);
             }
         } catch (error) {
             console.error("Ошибка при отправке формы:", error);
             if (!error.message.includes('Server returned an error')) {
-                 if (window.showAlert) window.showAlert('❌ Критическая ошибка', `Произошла непредвиденная ошибка. Подробности в консоли.`, true);
+                if (window.showAlert) window.showAlert('❌ Критическая ошибка', `Произошла непредвиденная ошибка. Подробности в консоли.`, true);
             }
         } finally {
             submitBtn.disabled = false;

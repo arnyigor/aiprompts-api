@@ -1,22 +1,22 @@
 // Используем встроенный fetch, доступный в современных средах Node.js на Vercel
 export default async function handler(req, res) {
-  // --- БЛОК БЕЗОПАСНОСТИ (УЛУЧШЕННЫЙ) ---
+  // --- ФИНАЛЬНЫЙ БЛОК БЕЗОПАСНОСТИ v2 ---
 
-  const VERCEL_URL = process.env.VERCEL_URL || 'localhost:3000';
-  const ALLOWED_ORIGINS = [
-    `https://${VERCEL_URL}`,
-    `https://www.aipromptsapi.vercel.app` // Добавим www-версию явно
+  const allowedOrigins = [
+    'https://aipromptsapi.vercel.app',
+    'https://www.aipromptsapi.vercel.app'
   ];
-  // Для локальной разработки добавляем localhost
-  if (process.env.NODE_ENV === 'development') {
-    ALLOWED_ORIGINS.push('http://localhost:3000');
+
+  // Используем системную переменную VERCEL_ENV, которую vercel dev устанавливает в 'development'
+  if (process.env.VERCEL_ENV === 'development') {
+    allowedOrigins.push('http://localhost:3000');
   }
 
   const origin = req.headers['origin'];
   const clientApiKey = req.headers['x-api-key'];
 
   // Устанавливаем CORS заголовок, только если origin разрешен
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+  if (origin && allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
 
@@ -28,16 +28,14 @@ export default async function handler(req, res) {
   }
 
   // Проверка доступа
-  if (!ALLOWED_ORIGINS.includes(origin) && clientApiKey !== process.env.API_SECRET_KEY) {
-    // Добавим логирование, чтобы видеть, какой origin был отклонен
-    console.warn(`Unauthorized access attempt from origin: ${origin}`);
+  if (!allowedOrigins.includes(origin) && clientApiKey !== process.env.API_SECRET_KEY) {
+    // Оставляем только один полезный лог на случай реальной атаки
+    console.warn(`[SECURITY] Unauthorized access attempt from origin: ${origin || 'unknown'}.`);
     return res.status(401).json({ error: 'Unauthorized' });
   }
   // --- КОНЕЦ БЛОКА БЕЗОПАСНОСТИ ---
 
-  // 1. Проверяем, что это POST-запрос
   if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
     return res.status(405).end('Method Not Allowed');
   }
 

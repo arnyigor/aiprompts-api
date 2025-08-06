@@ -22,11 +22,11 @@ async function getFileContent(download_url) {
 }
 
 export default async function handler(req, res) {
-  // --- БЛОК БЕЗОПАСНОСТИ (ФИНАЛЬНАЯ ВЕРСИЯ) ---
+  // --- ФИНАЛЬНЫЙ БЛОК БЕЗОПАСНОСТИ v2 ---
 
   const allowedOrigins = [
-    'https://aipromptsapi.vercel.app',   // Явно указываем прод
-    'https://www.aipromptsapi.vercel.app' // И www-версию
+    'https://aipromptsapi.vercel.app',
+    'https://www.aipromptsapi.vercel.app'
   ];
 
   // Используем системную переменную VERCEL_ENV, которую vercel dev устанавливает в 'development'
@@ -51,7 +51,8 @@ export default async function handler(req, res) {
 
   // Проверка доступа
   if (!allowedOrigins.includes(origin) && clientApiKey !== process.env.API_SECRET_KEY) {
-    console.warn(`[SECURITY] Unauthorized access attempt from origin: ${origin}. VERCEL_ENV: ${process.env.VERCEL_ENV}`);
+    // Оставляем только один полезный лог на случай реальной атаки
+    console.warn(`[SECURITY] Unauthorized access attempt from origin: ${origin || 'unknown'}.`);
     return res.status(401).json({ error: 'Unauthorized' });
   }
   // --- КОНЕЦ БЛОКА БЕЗОПАСНОСТИ ---

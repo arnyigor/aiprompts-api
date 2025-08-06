@@ -1,38 +1,81 @@
+// Ждем, пока весь HTML будет загружен
 document.addEventListener('DOMContentLoaded', () => {
-    // --- КОНФИГУРАЦИИ И ГЛОБАЛЬНОЕ СОСТОЯНИЕ ---
-    const GITHUB_API_BASE = '/api/get-prompts';
+
+    // --- ГЛОБАЛЬНЫЙ ОБЪЕКТ КОНФИГУРАЦИИ ---
+    window.CONFIG = { publicKey: null, constructorEnabled: false };
     window.allPrompts = [];
     let allCategories = [];
     let onModalSaveCallback = null;
     let constructorInitialized = false;
 
     // --- ЭЛЕМЕНТЫ DOM ---
-    const views = {
-        list: document.getElementById('list-view'),
-        constructor: document.getElementById('constructor-view')
-    };
+    const views = { list: document.getElementById('list-view'), constructor: document.getElementById('constructor-view') };
     const navLinks = document.querySelectorAll('.nav-link');
     const loader = document.getElementById('loader');
     const promptGrid = document.getElementById('prompt-grid');
     const searchInput = document.getElementById('search-input');
     const categoryFilters = document.getElementById('category-filters');
-
     const promptModal = document.getElementById('prompt-modal');
     const promptModalBody = document.getElementById('modal-body');
     const promptModalCloseBtn = promptModal.querySelector('.modal-close-btn');
-
     const alertModal = document.getElementById('alert-modal');
     const alertModalBody = document.getElementById('alert-modal-body');
     const alertModalCloseBtn = alertModal.querySelector('.modal-close-btn');
 
-    // --- ГЛАВНАЯ ФУНКЦИЯ ИНИЦИАЛИЗАЦИИ ---
-    function init() {
-        setupNavigation();
-        setupModalListeners();
-        setupListAndFilters();
+    // --- ФУНКЦИИ ---
+
+    async function fetchConfig() {
+        try {
+            const response = await fetch('/api/config');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            window.CONFIG = await response.json();
+            // ВАЖНАЯ ПРОВЕРКА
+            if (!window.CONFIG.publicKey) {
+                console.error("❌ КРИТИЧЕСКАЯ ОШИБКА: Сервер не вернул publicKey в /api/config. Проверьте переменную окружения PUBLIC_API_KEY на Vercel / в .env");
+            }
+        } catch (error) {
+            document.body.innerHTML = `<h1>Ошибка загрузки конфигурации: ${error.message}</h1>`;
+            throw error;
+        }
     }
 
-    // --- ЛОГИКА СПИСКА ПРОМПТОВ ---
+    async function fetchAllPrompts() {
+        try {
+            loader.classList.remove('hidden');
+            promptGrid.classList.add('hidden');
+            // Создаем заголовки и добавляем ключ, только если он не null/undefined
+            const headers = {};
+            if (window.CONFIG.publicKey) {
+                headers['X-Public-Key'] = window.CONFIG.publicKey;
+            } else {
+                // Если мы здесь, значит, конфиг загрузился, но ключ в нем пустой.
+                // Это ошибка конфигурации, и мы должны ее показать.
+                throw new Error("API ключ не был получен от /api/config.");
+            }
+
+            const response = await fetch('/api/get-prompts', { headers }); // Передаем объект с заголовками
+
+            if (!response.ok) throw new Error((await response.json()).error || 'Не удалось загрузить промпты');
+            const rawData = await response.json();
+            window.allPrompts = rawData.filter(p => p && (p.id || p.uuid)).map(p => {
+                if (!p.id && p.uuid) p.id = p.uuid;
+                return p;
+            });
+            allCategories = [...new Set(window.allPrompts.map(p => p.category).filter(Boolean))].sort();
+            renderCategories();
+            applyFilters();
+            if (constructorInitialized && window.updateConstructorCategories) {
+                window.updateConstructorCategories(allCategories);
+            }
+        } catch (error) {
+            console.error("Ошибка при загрузке промптов:", error);
+            loader.textContent = `❌ ${error.message}.`;
+        } finally {
+            loader.classList.add('hidden');
+            promptGrid.classList.remove('hidden');
+        }
+    }
+
     function setupListAndFilters() {
         searchInput.addEventListener('input', applyFilters);
         categoryFilters.addEventListener('click', (e) => {
@@ -51,39 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+        // ЗАПУСКАЕМ ЗАГРУЗКУ ДАННЫХ ЗДЕСЬ
         fetchAllPrompts();
-    }
-
-    async function fetchAllPrompts() {
-        try {
-            loader.classList.remove('hidden');
-            promptGrid.classList.add('hidden');
-            const response = await fetch(GITHUB_API_BASE);
-            if (!response.ok) throw new Error((await response.json()).error || 'Не удалось загрузить промпты');
-
-            const rawData = await response.json();
-            window.allPrompts = rawData.filter(p => p && (p.id || p.uuid)).map(p => {
-                if (!p.id && p.uuid) p.id = p.uuid;
-                return p;
-            });
-
-            allCategories = [...new Set(window.allPrompts.map(p => p.category).filter(Boolean))].sort();
-
-            renderCategories();
-            applyFilters();
-
-            // Если конструктор уже был открыт с пустыми категориями, обновляем их
-            if (constructorInitialized && window.updateConstructorCategories) {
-                window.updateConstructorCategories(allCategories);
-            }
-
-        } catch (error) {
-            console.error("Ошибка при загрузке промптов:", error);
-            loader.textContent = `❌ ${error.message}.`;
-        } finally {
-            loader.classList.add('hidden');
-            promptGrid.classList.remove('hidden');
-        }
     }
 
     function renderCategories() {
@@ -127,7 +139,6 @@ document.addEventListener('DOMContentLoaded', () => {
         renderPrompts(filteredPrompts);
     }
 
-    // --- ЛОГИКА МОДАЛЬНЫХ ОКОН ---
     function openModal(modalElement) {
         if (modalElement) {
             modalElement.classList.remove('hidden');
@@ -146,29 +157,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-
     window.showAlert = function (title, message, isError = false) {
         if (!alertModalBody) return;
-
         let finalMessage = message;
-
-        // --- НОВАЯ, ПРЕДЕЛЬНО ПРОСТАЯ ЛОГИКА ---
         if (isError) {
             try {
-                // Пытаемся распарсить как JSON, чтобы извлечь только основное сообщение
                 const errorJson = JSON.parse(message);
-                // Показываем ТОЛЬКО поле 'error', если оно есть. Иначе - всю строку.
                 finalMessage = errorJson.error || message;
             } catch (e) {
-                // Если это не JSON, оставляем как есть
                 finalMessage = message;
             }
         }
-
         alertModalBody.innerHTML = `
-        <h2 class="${isError ? 'error' : 'success'}">${title}</h2>
-        <div>${window.marked ? window.marked.parse(finalMessage) : `<p>${finalMessage}</p>`}</div>
-    `;
+            <h2 class="${isError ? 'error' : 'success'}">${title}</h2>
+            <div>${window.marked ? window.marked.parse(finalMessage) : `<p>${finalMessage}</p>`}</div>
+        `;
         openModal(alertModal);
     };
 
@@ -202,9 +205,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 createPromptBlock(`Вариант (тип: ${variant.variant_id.type}, id: ${variant.variant_id.id})`, variant.content)
             ).join('');
         }
+
         const footerHtml = isEditorMode
             ? `<div class="modal-footer"><button class="btn-save-modal">Сохранить</button></div>`
-            : (promptData.created_at ? `<div class="modal-footer"><button class="btn-edit" data-edit-id="${promptData.id}">Редактировать</button></div>` : '');
+            : (window.CONFIG.constructorEnabled && promptData.id ? `<div class="modal-footer"><button class="btn-edit" data-edit-id="${promptData.id}">Редактировать</button></div>` : '');
 
         promptModalBody.innerHTML = `
             <div class="modal-header">
@@ -272,8 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (target.matches('.btn-edit')) {
-                const promptId = target.dataset.editId;
-                const promptToEdit = window.allPrompts.find(p => p.id === promptId);
+                const promptToEdit = window.allPrompts.find(p => p.id === e.target.dataset.editId);
                 if (promptToEdit) {
                     closeModal(promptModal);
                     if (window.initializeConstructor) {
@@ -297,11 +300,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- ЛОГИКА НАВИГАЦИИ ---
     function setupNavigation() {
+        const constructorLink = document.querySelector('.nav-link[data-view="constructor-view"]');
+
+        if (!window.CONFIG.constructorEnabled) {
+            if (constructorLink) constructorLink.classList.add('hidden');
+        }
+
         navLinks.forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
+                if (e.target.classList.contains('hidden')) return;
+
                 const targetViewId = e.target.dataset.view;
                 navLinks.forEach(l => l.classList.remove('active'));
                 e.target.classList.add('active');
@@ -319,6 +329,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- ЗАПУСК ПРИЛОЖЕНИЯ ---
-    init();
+    // --- ГЛАВНАЯ ЛОГИКА ЗАПУСКА (ИСПРАВЛЕНО) ---
+    async function main() {
+        try {
+            await fetchConfig();
+            // Только после успешной загрузки конфига запускаем все остальное
+            setupNavigation();
+            setupModalListeners();
+            setupListAndFilters();
+        } catch (error) {
+            console.error("Инициализация приложения прервана из-за ошибки:", error);
+        }
+    }
+
+    main(); // Запускаем нашу главную асинхронную функцию
 });
