@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Создает коммит, следуя правилам Conventional Commits
+
+if [ -n "$1" ]; then
+  type="$1"
+else
+  echo "Ошибка: не указан тип коммита"
+  exit 1
+fi
+
+if [ -n "$2" ]; then
+  scope="$2"
+  subject="$3"
+else
+  subject="$2"
+fi
+
+if [ -n "$scope" ]; then
+  message="$type($scope): $subject"
+else
+  message="$type: $subject"
+fi
+
+git add .
+git commit -m "$message"
