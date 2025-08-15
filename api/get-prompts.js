@@ -1,94 +1,76 @@
-// api/get-prompts.js
-import { Octokit } from "@octokit/rest";
+// pages/api/get-prompts.js
 
-// Инициализируем один раз для переиспользования
-const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-const owner = process.env.GITHUB_REPO_OWNER;
-const repo = process.env.GITHUB_REPO_NAME;
-const promptsPath = 'prompts';
+// ИМПОРТ: Подключаем наш клиент Supabase
+import { supabase } from '../../lib/supabaseClient';
 
 // Включаем кеширование на стороне Vercel
-// https://vercel.com/docs/edge-network/caching#stale-while-revalidate
 export const config = {
   api: {
-    bodyParser: false, // Не нужен, так как это GET запрос
+    bodyParser: false,
   },
 };
 
-// Функция для получения содержимого файла по URL
-async function getFileContent(download_url) {
-  const response = await fetch(download_url);
-  return response.json();
-}
-
 export default async function handler(req, res) {
-  // --- ФИНАЛЬНЫЙ БЛОК БЕЗОПАСНОСТИ v2 ---
-
+  // --- БЛОК БЕЗОПАСНОСТИ (ОСТАВЛЕН БЕЗ ИЗМЕНЕНИЙ) ---
   const allowedOrigins = [
     'https://aipromptsapi.vercel.app',
     'https://www.aipromptsapi.vercel.app'
   ];
-
-  // Используем системную переменную VERCEL_ENV, которую vercel dev устанавливает в 'development'
   if (process.env.VERCEL_ENV === 'development') {
     allowedOrigins.push('http://localhost:3000');
   }
-
   const origin = req.headers['origin'];
   const clientApiKey = req.headers['x-api-key'];
 
-  // Устанавливаем CORS заголовок, только если origin разрешен
   if (origin && allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
-
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Проверка доступа
   if (!allowedOrigins.includes(origin) && clientApiKey !== process.env.API_SECRET_KEY) {
-    // Оставляем только один полезный лог на случай реальной атаки
     console.warn(`[SECURITY] Unauthorized access attempt from origin: ${origin || 'unknown'}.`);
     return res.status(401).json({ error: 'Unauthorized' });
   }
   // --- КОНЕЦ БЛОКА БЕЗОПАСНОСТИ ---
 
-  // Устанавливаем заголовки для кеширования.
+  // Устанавливаем заголовки для кеширования (без изменений)
   res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=3600');
 
   try {
-    // 1. Получаем список категорий (директорий)
-    const { data: categories } = await octokit.rest.repos.getContent({
-      owner, repo, path: promptsPath,
-    });
-    const categoryDirs = categories.filter(item => item.type === 'dir' && !item.name.startsWith('.'));
+    // КОММЕНТАРИЙ: Новая логика для пагинации
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const offset = (page - 1) * limit;
 
-    // 2. Для каждой категории получаем список файлов
-    const allPromptsPromises = categoryDirs.map(async (categoryDir) => {
-      const { data: files } = await octokit.rest.repos.getContent({
-        owner, repo, path: categoryDir.path,
-      });
+    // КОММЕНТАРИЙ: Запрашиваем данные напрямую из Supabase
+    const { data: prompts, error, count } = await supabase
+      .from('prompts')
+      // Запрашиваем все поля и общее количество записей для пагинации
+      .select('*', { count: 'exact' })
+      // Фильтруем только публичные промпты согласно ТЗ
+      .eq('status', 'active')
+      // Сортируем по дате создания, чтобы новые были сверху
+      .order('created_at', { ascending: false })
+      // Применяем пагинацию
+      .range(offset, offset + limit - 1);
 
-      // 3. Для каждого файла получаем его содержимое
-      const fileContentPromises = files
-        .filter(file => file.type === 'file' && file.name.endsWith('.json'))
-        .map(file => getFileContent(file.download_url));
+    if (error) {
+      throw error; // Передаем ошибку в блок catch
+    }
 
-      return Promise.all(fileContentPromises);
-    });
+    // КОММЕНТАРИЙ: Рассчитываем, есть ли следующая страница
+    const hasNextPage = offset + prompts.length < count;
 
-    const promptsByCategory = await Promise.all(allPromptsPromises);
-    const allPrompts = promptsByCategory.flat(); // Сливаем все в один массив
-
-    // 4. Отправляем все промпты клиенту
-    res.status(200).json(allPrompts);
+    // Отправляем ответ в формате, указанном в ТЗ
+    res.status(200).json({ prompts, hasNextPage });
 
   } catch (error) {
-    console.error("Error fetching prompts from GitHub:", error);
-    res.status(500).json({ error: 'Failed to fetch prompts from GitHub.' });
+    console.error("Error fetching prompts from Supabase:", error.message);
+    res.status(500).json({ error: 'Failed to fetch prompts from Supabase.' });
   }
 }

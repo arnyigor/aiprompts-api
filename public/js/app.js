@@ -1,4 +1,3 @@
-// Ждем, пока весь HTML будет загружен
 document.addEventListener('DOMContentLoaded', () => {
 
     // --- ГЛОБАЛЬНЫЙ ОБЪЕКТ КОНФИГУРАЦИИ ---
@@ -22,61 +21,65 @@ document.addEventListener('DOMContentLoaded', () => {
     const alertModalBody = document.getElementById('alert-modal-body');
     const alertModalCloseBtn = alertModal.querySelector('.modal-close-btn');
 
-    // --- ФУНКЦИИ ---
-
-    async function fetchConfig() {
+    // --- ОСНОВНАЯ ЛОГИКА ЗАПУСКА ---
+    async function main() {
         try {
-            const response = await fetch('/api/config');
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            window.CONFIG = await response.json();
-            // ВАЖНАЯ ПРОВЕРКА
-            if (!window.CONFIG.publicKey) {
-                console.error("❌ КРИТИЧЕСКАЯ ОШИБКА: Сервер не вернул publicKey в /api/config. Проверьте переменную окружения PUBLIC_API_KEY на Vercel / в .env");
-            }
+            await fetchConfig();
+            setupNavigation();
+            setupModalListeners();
+            await setupListAndFilters();
         } catch (error) {
-            document.body.innerHTML = `<h1>Ошибка загрузки конфигурации: ${error.message}</h1>`;
-            throw error;
+            console.log("Инициализация приложения прервана из-за ошибки в fetchConfig.");
         }
     }
 
+    // --- КЛЮЧЕВЫЕ ФУНКЦИИ ---
+    async function fetchConfig() {
+        try {
+            const response = await fetch('/api/config');
+            if (!response.ok) throw new Error('Не удалось загрузить конфигурацию');
+            window.CONFIG = await response.json();
+            console.log("✅ Конфигурация успешно загружена:", window.CONFIG);
+        } catch (error) {
+            console.error("❌ КРИТИЧЕСКАЯ ОШИБКА:", error);
+            document.body.innerHTML = `
+                <div style="text-align: center; padding: 4rem;">
+                    <h1>Ошибка загрузки приложения</h1>
+                    <p>Не удалось получить конфигурацию с сервера. Пожалуйста, попробуйте позже.</p>
+                </div>
+            `;
+            throw error;
+        }
+    }
+    
     async function fetchAllPrompts() {
         try {
             loader.classList.remove('hidden');
             promptGrid.classList.add('hidden');
-            // Создаем заголовки и добавляем ключ, только если он не null/undefined
-            const headers = {};
-            if (window.CONFIG.publicKey) {
-                headers['X-Public-Key'] = window.CONFIG.publicKey;
-            } else {
-                // Если мы здесь, значит, конфиг загрузился, но ключ в нем пустой.
-                // Это ошибка конфигурации, и мы должны ее показать.
-                throw new Error("API ключ не был получен от /api/config.");
+            if (!window.CONFIG.publicKey) {
+                throw new Error("API ключ отсутствует в конфигурации.");
             }
-
-            const response = await fetch('/api/get-prompts', { headers }); // Передаем объект с заголовками
-
+            const response = await fetch('/api/get-prompts', { headers: { 'X-Public-Key': window.CONFIG.publicKey } });
             if (!response.ok) throw new Error((await response.json()).error || 'Не удалось загрузить промпты');
+            
             const rawData = await response.json();
             window.allPrompts = rawData.filter(p => p && (p.id || p.uuid)).map(p => {
                 if (!p.id && p.uuid) p.id = p.uuid;
                 return p;
             });
+            
             allCategories = [...new Set(window.allPrompts.map(p => p.category).filter(Boolean))].sort();
-            renderCategories();
-            applyFilters();
-            if (constructorInitialized && window.updateConstructorCategories) {
-                window.updateConstructorCategories(allCategories);
-            }
         } catch (error) {
             console.error("Ошибка при загрузке промптов:", error);
             loader.textContent = `❌ ${error.message}.`;
+            throw error;
         } finally {
             loader.classList.add('hidden');
             promptGrid.classList.remove('hidden');
         }
     }
 
-    function setupListAndFilters() {
+    async function setupListAndFilters() {
         searchInput.addEventListener('input', applyFilters);
         categoryFilters.addEventListener('click', (e) => {
             if (e.target.matches('.category-btn')) {
@@ -89,13 +92,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const card = e.target.closest('.prompt-card');
             if (card && card.dataset.promptId) {
                 const prompt = window.allPrompts.find(p => p.id === card.dataset.promptId);
-                if (prompt && window.openModalWithPromptData) {
-                    window.openModalWithPromptData(prompt);
-                }
+                if (prompt) window.openModalWithPromptData(prompt);
             }
         });
-        // ЗАПУСКАЕМ ЗАГРУЗКУ ДАННЫХ ЗДЕСЬ
-        fetchAllPrompts();
+        
+        await fetchAllPrompts();
+        
+        renderCategories();
+        applyFilters();
+
+        if (constructorInitialized && window.updateConstructorCategories) {
+            window.updateConstructorCategories(allCategories);
+        }
     }
 
     function renderCategories() {
@@ -130,15 +138,15 @@ document.addEventListener('DOMContentLoaded', () => {
             filteredPrompts = filteredPrompts.filter(p => p.category === activeCategory);
         }
         if (searchTerm) {
-            filteredPrompts = filteredPrompts.filter(p =>
-                (p.title || '').toLowerCase().includes(searchTerm) ||
-                (p.description || '').toLowerCase().includes(searchTerm) ||
+            filteredPrompts = filteredPrompts.filter(p => 
+                (p.title || '').toLowerCase().includes(searchTerm) || 
+                (p.description || '').toLowerCase().includes(searchTerm) || 
                 (p.tags || []).some(tag => tag.toLowerCase().includes(searchTerm))
             );
         }
         renderPrompts(filteredPrompts);
     }
-
+    
     function openModal(modalElement) {
         if (modalElement) {
             modalElement.classList.remove('hidden');
@@ -146,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.style.overflow = 'hidden';
         }
     }
-
+    
     function closeModal(modalElement) {
         if (modalElement) {
             modalElement.classList.remove('visible');
@@ -157,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    window.showAlert = function (title, message, isError = false) {
+    window.showAlert = function(title, message, isError = false) {
         if (!alertModalBody) return;
         let finalMessage = message;
         if (isError) {
@@ -201,11 +209,11 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         let variantsHtml = '';
         if (!isEditorMode && promptData.prompt_variants?.length > 0) {
-            variantsHtml = promptData.prompt_variants.map((variant) =>
+            variantsHtml = promptData.prompt_variants.map((variant) => 
                 createPromptBlock(`Вариант (тип: ${variant.variant_id.type}, id: ${variant.variant_id.id})`, variant.content)
             ).join('');
         }
-
+        
         const footerHtml = isEditorMode
             ? `<div class="modal-footer"><button class="btn-save-modal">Сохранить</button></div>`
             : (window.CONFIG.constructorEnabled && promptData.id ? `<div class="modal-footer"><button class="btn-edit" data-edit-id="${promptData.id}">Редактировать</button></div>` : '');
@@ -221,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         openModal(promptModal);
     }
-
+    
     window.openModalWithPromptData = function (promptData) { openSharedModal(promptData, false); };
     window.openModalWithEditor = function (text, onSave) {
         const virtualPrompt = { title: "Редактор Markdown", content: { ru: text } };
@@ -250,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 closeModal(alertModal);
             }
         });
-
+        
         promptModal.addEventListener('click', async (e) => {
             const target = e.target;
             const promptBlock = target.closest('.prompt-view-block');
@@ -289,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     views.constructor.classList.add('active');
                 }
             }
-
+            
             if (target.matches('.btn-save-modal')) {
                 const newText = promptModal.querySelector('.prompt-raw-view').value;
                 if (typeof onModalSaveCallback === 'function') {
@@ -302,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setupNavigation() {
         const constructorLink = document.querySelector('.nav-link[data-view="constructor-view"]');
-
+        
         if (!window.CONFIG.constructorEnabled) {
             if (constructorLink) constructorLink.classList.add('hidden');
         }
@@ -311,36 +319,27 @@ document.addEventListener('DOMContentLoaded', () => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
                 if (e.target.classList.contains('hidden')) return;
-
+                
                 const targetViewId = e.target.dataset.view;
                 navLinks.forEach(l => l.classList.remove('active'));
                 e.target.classList.add('active');
                 Object.values(views).forEach(view => view.classList.remove('active'));
                 const viewKey = targetViewId.split('-')[0];
                 if (views[viewKey]) views[viewKey].classList.add('active');
-
+                
                 if (targetViewId === 'constructor-view' && !constructorInitialized) {
                     if (window.initializeConstructor) {
                         window.initializeConstructor(views.constructor, allCategories, null);
                         constructorInitialized = true;
+                    }
+                } else if (targetViewId === 'constructor-view' && constructorInitialized) {
+                    if (window.updateConstructorCategories) {
+                        window.updateConstructorCategories(allCategories);
                     }
                 }
             });
         });
     }
 
-    // --- ГЛАВНАЯ ЛОГИКА ЗАПУСКА (ИСПРАВЛЕНО) ---
-    async function main() {
-        try {
-            await fetchConfig();
-            // Только после успешной загрузки конфига запускаем все остальное
-            setupNavigation();
-            setupModalListeners();
-            setupListAndFilters();
-        } catch (error) {
-            console.error("Инициализация приложения прервана из-за ошибки:", error);
-        }
-    }
-
-    main(); // Запускаем нашу главную асинхронную функцию
+    main();
 });
