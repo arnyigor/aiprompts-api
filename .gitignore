@@ -14,7 +14,7 @@ npm-debug.log*
 .env
 .env.local
 .env.*.local
-/synced-prompts/
+
 # Папки с результатами сборки
 /dist
 /build
