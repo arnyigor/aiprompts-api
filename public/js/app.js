@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
             throw error;
         }
     }
-    
+
     async function fetchAllPrompts() {
         try {
             loader.classList.remove('hidden');
@@ -61,13 +61,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const response = await fetch('/api/get-prompts', { headers: { 'X-Public-Key': window.CONFIG.publicKey } });
             if (!response.ok) throw new Error((await response.json()).error || 'Не удалось загрузить промпты');
-            
+
             const rawData = await response.json();
             window.allPrompts = rawData.filter(p => p && (p.id || p.uuid)).map(p => {
                 if (!p.id && p.uuid) p.id = p.uuid;
                 return p;
             });
-            
+
             allCategories = [...new Set(window.allPrompts.map(p => p.category).filter(Boolean))].sort();
         } catch (error) {
             console.error("Ошибка при загрузке промптов:", error);
@@ -95,9 +95,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (prompt) window.openModalWithPromptData(prompt);
             }
         });
-        
+
         await fetchAllPrompts();
-        
+
         renderCategories();
         applyFilters();
 
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         promptGrid.innerHTML = prompts.map(prompt => `
-            <div class="prompt-card" data-prompt-id="${prompt.id}"> 
+            <div class="prompt-card" data-prompt-id="${prompt.id}">
                 <h3>${prompt.title || 'Без названия'}</h3>
                 <div class="prompt-card-meta"><span><strong>Категория:</strong> ${prompt.category}</span><span><strong>Версия:</strong> ${prompt.version}</span></div>
                 <p class="prompt-card-desc">${prompt.description || 'Нет описания.'}</p>
@@ -138,15 +138,15 @@ document.addEventListener('DOMContentLoaded', () => {
             filteredPrompts = filteredPrompts.filter(p => p.category === activeCategory);
         }
         if (searchTerm) {
-            filteredPrompts = filteredPrompts.filter(p => 
-                (p.title || '').toLowerCase().includes(searchTerm) || 
-                (p.description || '').toLowerCase().includes(searchTerm) || 
+            filteredPrompts = filteredPrompts.filter(p =>
+                (p.title || '').toLowerCase().includes(searchTerm) ||
+                (p.description || '').toLowerCase().includes(searchTerm) ||
                 (p.tags || []).some(tag => tag.toLowerCase().includes(searchTerm))
             );
         }
         renderPrompts(filteredPrompts);
     }
-    
+
     function openModal(modalElement) {
         if (modalElement) {
             modalElement.classList.remove('hidden');
@@ -154,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.style.overflow = 'hidden';
         }
     }
-    
+
     function closeModal(modalElement) {
         if (modalElement) {
             modalElement.classList.remove('visible');
@@ -209,11 +209,11 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         let variantsHtml = '';
         if (!isEditorMode && promptData.prompt_variants?.length > 0) {
-            variantsHtml = promptData.prompt_variants.map((variant) => 
+            variantsHtml = promptData.prompt_variants.map((variant) =>
                 createPromptBlock(`Вариант (тип: ${variant.variant_id.type}, id: ${variant.variant_id.id})`, variant.content)
             ).join('');
         }
-        
+
         const footerHtml = isEditorMode
             ? `<div class="modal-footer"><button class="btn-save-modal">Сохранить</button></div>`
             : (window.CONFIG.constructorEnabled && promptData.id ? `<div class="modal-footer"><button class="btn-edit" data-edit-id="${promptData.id}">Редактировать</button></div>` : '');
@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         openModal(promptModal);
     }
-    
+
     window.openModalWithPromptData = function (promptData) { openSharedModal(promptData, false); };
     window.openModalWithEditor = function (text, onSave) {
         const virtualPrompt = { title: "Редактор Markdown", content: { ru: text } };
@@ -258,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 closeModal(alertModal);
             }
         });
-        
+
         promptModal.addEventListener('click', async (e) => {
             const target = e.target;
             const promptBlock = target.closest('.prompt-view-block');
@@ -287,17 +287,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const promptToEdit = window.allPrompts.find(p => p.id === e.target.dataset.editId);
                 if (promptToEdit) {
                     closeModal(promptModal);
-                    if (window.initializeConstructor) {
-                        window.initializeConstructor(views.constructor, allCategories, promptToEdit);
-                    }
                     navLinks.forEach(l => l.classList.remove('active'));
                     const constructorLink = document.querySelector('.nav-link[data-view="constructor-view"]');
                     if (constructorLink) constructorLink.classList.add('active');
                     Object.values(views).forEach(v => v.classList.remove('active'));
                     views.constructor.classList.add('active');
+                    if (window.initializeConstructor) {
+                        window.initializeConstructor(views.constructor, allCategories, promptToEdit);
+                    }
                 }
             }
-            
+
             if (target.matches('.btn-save-modal')) {
                 const newText = promptModal.querySelector('.prompt-raw-view').value;
                 if (typeof onModalSaveCallback === 'function') {
@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setupNavigation() {
         const constructorLink = document.querySelector('.nav-link[data-view="constructor-view"]');
-        
+
         if (!window.CONFIG.constructorEnabled) {
             if (constructorLink) constructorLink.classList.add('hidden');
         }
@@ -319,27 +319,23 @@ document.addEventListener('DOMContentLoaded', () => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
                 if (e.target.classList.contains('hidden')) return;
-                
+
                 const targetViewId = e.target.dataset.view;
                 navLinks.forEach(l => l.classList.remove('active'));
                 e.target.classList.add('active');
                 Object.values(views).forEach(view => view.classList.remove('active'));
                 const viewKey = targetViewId.split('-')[0];
                 if (views[viewKey]) views[viewKey].classList.add('active');
-                
-                if (targetViewId === 'constructor-view' && !constructorInitialized) {
+
+                if (targetViewId === 'constructor-view') {
                     if (window.initializeConstructor) {
                         window.initializeConstructor(views.constructor, allCategories, null);
-                        constructorInitialized = true;
-                    }
-                } else if (targetViewId === 'constructor-view' && constructorInitialized) {
-                    if (window.updateConstructorCategories) {
-                        window.updateConstructorCategories(allCategories);
                     }
                 }
             });
         });
     }
 
+    // --- ЗАПУСК ПРИЛОЖЕНИЯ ---
     main();
 });

@@ -1,14 +1,7 @@
-// pages/api/get-prompts.js
-
-// ИМПОРТ: Подключаем наш клиент Supabase
-import { supabase } from '../../lib/supabaseClient';
-
-// Включаем кеширование на стороне Vercel
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+import { Octokit } from "@octokit/rest";
+// Мы пока не будем использовать Vercel KV/Postgres здесь,
+// чтобы сначала запустить базовую функциональность.
+// import { kv } from '@vercel/kv';
 
 export default async function handler(req, res) {
   // --- БЛОК БЕЗОПАСНОСТИ (ОСТАВЛЕН БЕЗ ИЗМЕНЕНИЙ) ---
@@ -41,36 +34,47 @@ export default async function handler(req, res) {
   // Устанавливаем заголовки для кеширования (без изменений)
   res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=3600');
 
-  try {
-    // КОММЕНТАРИЙ: Новая логика для пагинации
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
-    const offset = (page - 1) * limit;
+    try {
+        const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+        const owner = process.env.GITHUB_REPO_OWNER;
+        const repo = process.env.GITHUB_REPO_NAME;
+        const promptsPath = 'prompts';
 
-    // КОММЕНТАРИЙ: Запрашиваем данные напрямую из Supabase
-    const { data: prompts, error, count } = await supabase
-      .from('prompts')
-      // Запрашиваем все поля и общее количество записей для пагинации
-      .select('*', { count: 'exact' })
-      // Фильтруем только публичные промпты согласно ТЗ
-      .eq('status', 'active')
-      // Сортируем по дате создания, чтобы новые были сверху
-      .order('created_at', { ascending: false })
-      // Применяем пагинацию
-      .range(offset, offset + limit - 1);
+        const { data: categories } = await octokit.rest.repos.getContent({
+            owner, repo, path: promptsPath,
+        });
+        const categoryDirs = categories.filter(item => item.type === 'dir' && !item.name.startsWith('.'));
 
-    if (error) {
-      throw error; // Передаем ошибку в блок catch
+        const allPromptsPromises = categoryDirs.map(async (categoryDir) => {
+            const { data: files } = await octokit.rest.repos.getContent({
+                owner, repo, path: categoryDir.path,
+            });
+            const fileContentPromises = files
+                .filter(file => file.type === 'file' && file.name.endsWith('.json'))
+                .map(async (file) => {
+                    const response = await fetch(file.download_url);
+                    const promptData = await response.json();
+
+                    // --- ОБОГАЩЕНИЕ ДАННЫХ (ПОКА ЗАГЛУШКА) ---
+                    // Добавляем пустой объект рейтинга, чтобы фронтенд всегда его получал
+                    promptData.rating = { upvotes: 0, downvotes: 0 };
+
+                    return promptData;
+                });
+            return Promise.all(fileContentPromises);
+        });
+
+        const promptsByCategory = await Promise.all(allPromptsPromises);
+        const allPrompts = promptsByCategory.flat(); // Сливаем все в один массив
+
+        res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60'); // Кеш на 5 минут для отладки
+        res.status(200).json(allPrompts); // <-- ГАРАНТИРОВАННО ВОЗВРАЩАЕМ МАССИВ
+
+    } catch (error) {
+        console.error("FATAL ERROR in get-prompts handler:", error);
+        res.status(500).json({
+            error: 'Failed to fetch prompts from GitHub.',
+            details: error.message
+        });
     }
-
-    // КОММЕНТАРИЙ: Рассчитываем, есть ли следующая страница
-    const hasNextPage = offset + prompts.length < count;
-
-    // Отправляем ответ в формате, указанном в ТЗ
-    res.status(200).json({ prompts, hasNextPage });
-
-  } catch (error) {
-    console.error("Error fetching prompts from Supabase:", error.message);
-    res.status(500).json({ error: 'Failed to fetch prompts from Supabase.' });
-  }
 }

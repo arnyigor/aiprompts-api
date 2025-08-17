@@ -40,50 +40,23 @@ const constructorHtmlTemplate = `
             <button type="submit" id="submit-btn" class="btn-submit"><span class="button-text"></span><div class="spinner"></div></button>
         </div>
         <div class="preview-container"><h2>Предпросмотр JSON</h2><pre id="json-preview-constructor" class="preview-area json-preview"></pre></div>
+        <div class="preview-container"><h2>Ответ Сервера</h2><pre id="response-area-constructor" class="preview-area" aria-live="polite"></pre></div>
     </form>
 `;
 
-window.updateConstructorCategories = function (categories) {
-    const container = document.getElementById('constructor-view');
-    const form = container.querySelector('#prompt-form');
-    if (!form) return;
-
-    const categorySelect = container.querySelector('#category-constructor');
-    if (!categorySelect) return;
-
-    const currentValue = categorySelect.value;
-    const isEditing = !!form.querySelector('#original-category').value;
-
-    if (categories && categories.length > 0) {
-        categorySelect.innerHTML = '<option value="">Выберите категорию...</option>';
-        categories.forEach(category => {
-            const option = document.createElement('option');
-            option.value = category;
-            option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
-            categorySelect.appendChild(option);
-        });
-
-        // Восстанавливаем значение только если это не режим редактирования, 
-        // так как в режиме редактирования значение уже установлено.
-        if (!isEditing && categories.includes(currentValue)) {
-            categorySelect.value = currentValue;
-        }
-    } else {
-        categorySelect.innerHTML = '<option value="">Категории не найдены</option>';
-    }
-};
-
+// promptToEdit - необязательный параметр для режима редактирования
 window.initializeConstructor = function (container, categories = [], promptToEdit = null) {
-    if (!container) return;
     container.innerHTML = constructorHtmlTemplate;
 
     const form = container.querySelector('#prompt-form');
     const jsonPreview = container.querySelector('#json-preview-constructor');
+    const responseArea = container.querySelector('#response-area-constructor');
+    const categorySelect = container.querySelector('#category-constructor');
     let currentId = promptToEdit ? promptToEdit.id : '';
     const isEditing = promptToEdit !== null;
 
-    form.querySelector('#constructor-title').textContent = isEditing ? "Редактирование промпта" : "Создание нового промпта";
-    form.querySelector('#submit-btn .button-text').textContent = isEditing ? "Отправить изменения" : "Создать Pull Request";
+    container.querySelector('#constructor-title').textContent = isEditing ? "Редактирование промпта" : "Создание нового промпта";
+    container.querySelector('#submit-btn .button-text').textContent = isEditing ? "Отправить изменения" : "Создать Pull Request";
 
     const itemTemplates = {
         simple: (value = '') => `<input type="text" value="${value}" /><button type="button" class="btn-remove">&times;</button>`,
@@ -101,24 +74,28 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
             updateJsonPreview();
         });
         updateJsonPreview();
-        return item;
+        return item; // Возвращаем для заполнения
     }
 
-    function gatherPayload() {
+    function gatherPayload(generateNewId = false) {
+        if (generateNewId && !currentId) {
+            currentId = (() => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }))();
+        }
+        const formData = new FormData(form);
         const originalCategory = form.querySelector('#original-category').value;
         return {
             id: currentId,
-            title: form.querySelector('#title').value,
-            version: form.querySelector('#version').value,
+            title: formData.get('title'),
+            version: formData.get('version'),
             status: "active", is_local: false, is_favorite: false,
-            description: form.querySelector('#description').value,
-            content: { ru: form.querySelector('#content_ru').value, en: form.querySelector('#content_en').value },
+            description: formData.get('description'),
+            content: { ru: formData.get('content_ru'), en: formData.get('content_en') },
             prompt_variants: Array.from(container.querySelectorAll('#variants-list .variant-item')).map(item => ({
                 variant_id: { type: item.querySelector('[data-key="type"]').value, id: item.querySelector('[data-key="id"]').value, priority: parseInt(item.querySelector('[data-key="priority"]').value, 10) || 0 },
                 content: { ru: item.querySelector('[data-key="content_ru"]').value, en: item.querySelector('[data-key="content_en"]').value }
             })).filter(v => v.variant_id.type && v.variant_id.id),
             compatible_models: Array.from(container.querySelectorAll('#models-list input')).map(i => i.value).filter(Boolean),
-            category: form.querySelector('#category-constructor').value,
+            category: formData.get('category'),
             tags: Array.from(container.querySelectorAll('#tags-list input')).map(i => i.value).filter(Boolean),
             variables: Array.from(container.querySelectorAll('#variables-list .dynamic-item')).map(item => ({ name: item.querySelector('[data-key="name"]').value, description: item.querySelector('[data-key="description"]').value, default_value: item.querySelector('[data-key="default_value"]').value })).filter(v => v.name),
             metadata: { author: { id: "", name: "WebApp Contributor" }, source: "WebApp", notes: "" },
@@ -141,11 +118,133 @@ window.initializeConstructor = function (container, categories = [], promptToEdi
         return isValid;
     }
 
-    window.updateConstructorCategories(categories);
+    function populateCategories(categoriesToPopulate) {
+        if (categoriesToPopulate && categoriesToPopulate.length > 0) {
+            categorySelect.innerHTML = '<option value="">Выберите категорию...</option>';
+            categoriesToPopulate.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+                categorySelect.appendChild(option);
+            });
+        } else {
+            categorySelect.innerHTML = '<option value="">Загрузка...</option>';
+        }
+    }
 
     if (isEditing) {
         form.querySelector('#title').value = promptToEdit.title || '';
         form.querySelector('#version').value = promptToEdit.version || '';
         form.querySelector('#description').value = promptToEdit.description || '';
         form.querySelector('#content_ru').value = promptToEdit.content?.ru || '';
-        form.querySelector('#content_en').value = promptToEdit.content?.en
+        form.querySelector('#content_en').value = promptToEdit.content?.en || '';
+        populateCategories(categories);
+        form.querySelector('#category-constructor').value = promptToEdit.category || '';
+        form.querySelector('#original-category').value = promptToEdit.category || '';
+
+        (promptToEdit.tags || []).forEach(tag => addItem(container.querySelector('#tags-list'), itemTemplates.simple(tag)));
+        (promptToEdit.compatible_models || []).forEach(model => addItem(container.querySelector('#models-list'), itemTemplates.simple(model)));
+        (promptToEdit.variables || []).forEach(v => addItem(container.querySelector('#variables-list'), itemTemplates.variable(v.name, v.description, v.default_value)));
+
+        (promptToEdit.prompt_variants || []).forEach(variant => {
+            const newItem = addItem(container.querySelector('#variants-list'), itemTemplates.variant());
+            newItem.querySelector('[data-key="type"]').value = variant.variant_id.type;
+            newItem.querySelector('[data-key="id"]').value = variant.variant_id.id;
+            newItem.querySelector('[data-key="priority"]').value = variant.variant_id.priority || '';
+            newItem.querySelector('[data-key="content_ru"]').value = variant.content.ru || '';
+            newItem.querySelector('[data-key="content_en"]').value = variant.content.en || '';
+        });
+    } else {
+        populateCategories(categories);
+    }
+
+    form.addEventListener('click', (e) => {
+        if (e.target.matches('.btn-editor-preview')) {
+            const targetId = e.target.dataset.editorTarget;
+            let targetTextarea;
+            if (targetId) {
+                targetTextarea = form.querySelector(`#${targetId}`);
+            } else {
+                const dynamicTargetKey = e.target.dataset.editorTargetDynamic;
+                targetTextarea = e.target.closest('.form-group-editor').querySelector(`[data-key="${dynamicTargetKey}"]`);
+            }
+            if (targetTextarea && window.openModalWithEditor) {
+                window.openModalWithEditor(targetTextarea.value, (newText) => {
+                    targetTextarea.value = newText;
+                    updateJsonPreview();
+                });
+            }
+        }
+        if (e.target.matches('.btn-add')) {
+            const listId = e.target.dataset.listId;
+            const listContainer = container.querySelector(`#${listId}`);
+            let template;
+            if (listId === 'variants-list') template = itemTemplates.variant();
+            else if (listId === 'variables-list') template = itemTemplates.variable();
+            else template = itemTemplates.simple();
+            addItem(listContainer, template);
+        }
+    });
+
+    form.addEventListener('input', updateJsonPreview);
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!validateForm()) { alert('Пожалуйста, заполните все обязательные поля.'); return; }
+
+        const submitBtn = form.querySelector('#submit-btn');
+        submitBtn.disabled = true;
+        submitBtn.classList.add('loading');
+
+        // Генерируем новый ID только если мы НЕ в режиме редактирования
+        if (!isEditing) {
+            currentId = (() => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }))();
+        }
+
+        const payload = gatherPayload();
+
+        const now = new Date().toISOString();
+        payload.updated_at = now;
+        if (!isEditing) {
+            payload.created_at = now;
+        } else {
+             const originalPrompt = window.allPrompts.find(p => p.id === currentId);
+             payload.created_at = originalPrompt?.created_at || now;
+        }
+
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (window.CONFIG && window.CONFIG.publicKey) {
+                headers['X-Public-Key'] = window.CONFIG.publicKey;
+            }
+
+            const response = await fetch(CONSTRUCTOR_API_URL, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(payload)
+            });
+            const responseData = await response.json();
+            if (!response.ok) {
+                const errorPayload = { ...responseData, status: response.status };
+                if (window.showAlert) window.showAlert(`❌ Ошибка отправки`, JSON.stringify(errorPayload), true);
+                throw new Error('Server returned an error');
+            }
+            const successMessage = `**Pull Request успешно создан!**\n\nВы можете посмотреть его по ссылке:\n[${responseData.pullRequestUrl}](${responseData.pullRequestUrl})`;
+            if (window.showAlert) window.showAlert('✅ Успех!', successMessage, false);
+
+            if (window.initializeConstructor) {
+                window.initializeConstructor(container, categories);
+            }
+        } catch (error) {
+            console.error("Ошибка при отправке формы:", error);
+            if (!error.message.includes('Server returned an error')) {
+                 if (window.showAlert) window.showAlert('❌ Критическая ошибка', `Произошла непредвиденная ошибка. Подробности в консоли.`, true);
+            }
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('loading');
+        }
+    });
+
+    updateJsonPreview();
+};
